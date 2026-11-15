@@ -150,6 +150,8 @@
     panel = document.createElement("div"); panel.id = "oc-panel"; panel.hidden = true; panel.setAttribute("role", "dialog"); panel.setAttribute("aria-modal", "true"); panel.setAttribute("aria-label", "Save your progress");
     ["pointerdown", "touchstart", "wheel", "keydown"].forEach(function (ev) { panel.addEventListener(ev, function (e) { e.stopPropagation(); }, { passive: true }); });
     document.body.appendChild(panel);
+    var tapFocus = function (e) { var t = e.target, i = t.closest && (t.closest("input") || (t.closest(".boxes") && panel.querySelector("#oc-code"))); if (i && document.activeElement !== i) i.focus(); };   // the game swallows taps; focus the field ourselves
+    panel.addEventListener("touchend", tapFocus, { passive: true }); panel.addEventListener("click", tapFocus);
     var sk = +ls.get(SKIP) || 0;   // ask on launch until signed in; "Continue without saving" quiets it for 3 days
     if (!ls.get(TOK) && Date.now() - sk > 3 * 864e5 && !ss.get("orbit.cloud.asked")) { ss.set("orbit.cloud.asked", "1"); setTimeout(open, 900); }
     var tok = ls.get(TOK);
