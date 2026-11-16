@@ -205,7 +205,7 @@ trailGeo.setAttribute("position", new THREE.BufferAttribute(trailPos, 3)); trail
 const trail = new THREE.Points(trailGeo, new THREE.PointsMaterial({ size: 0.55, map: moteTex, vertexColors: true, transparent: true, blending: THREE.AdditiveBlending, depthWrite: false }));
 function spawnComet() { const a = Math.random() * 6.28, from = new THREE.Vector3(Math.cos(a) * 60, rnd(-6, 10), Math.sin(a) * 60), to = new THREE.Vector3(-from.x * 0.4 + rnd(-10, 10), rnd(-3, 5), -from.z * 0.4 + rnd(-10, 10)).normalize().multiplyScalar(-60).negate();
   comet = { p: from.clone(), v: to.sub(from).normalize().multiplyScalar(11), hist: [] }; scene.add(cometHead, cometGlow, trail); tone(990, 0.4, "triangle", 0.03, 1.3); }
-function endComet() { scene.remove(cometHead, cometGlow, trail); comet = null; }
+function endComet() { scene.remove(cometHead, cometGlow, trail); comet = null; if (typeof tc !== "undefined") tc = null; }
 
 // Burst particles
 const BURST = 600, bGeo = new THREE.BufferGeometry(), bPos = new Float32Array(BURST * 3), bCol = new Float32Array(BURST * 3), bVel = new Float32Array(BURST * 3), bLife = new Float32Array(BURST);
@@ -297,6 +297,51 @@ function setMode(m, quiet) { tapMode = m === "tap"; try { localStorage.setItem("
   if (cine) setCine(false); focus = null; setZoom(tapMode ? Math.log(14 / camDist) : 0); if (!quiet) tone(tapMode ? 520 : 780, 0.08, "sine", 0.03, 1.1); }
 modeSw.addEventListener("click", (e) => { const b = e.target.closest("[data-m]"); if (b) setMode(b.dataset.m); });
 setTimeout(() => setMode(tapMode ? "tap" : "view", true), 0);
+
+/* KING_TAPVIEW: Tap is its own simple 2D screen: one big star, tap anywhere, comets streak across. */
+const tv = document.createElement("canvas"); tv.id = "tapv"; tv.setAttribute("aria-label", "Tap anywhere to collect stardust. Tap comets for a bonus."); $("stage").insertBefore(tv, $("labels"));
+const tx = tv.getContext("2d"); let tW = 0, tH = 0, tDpr = 1, tc = null, tPulse = 0, tRot = 0;
+const tDots = Array.from({ length: 140 }, () => ({ x: Math.random(), y: Math.random(), r: Math.random() * 1.3 + 0.3, p: Math.random() * 6.28, s: 0.4 + Math.random() * 1.6 }));
+let tParts = [], tRings = [];
+function tSize() { const r = tv.getBoundingClientRect(); if (!r.width) return; tDpr = Math.min(2, devicePixelRatio || 1); tW = r.width; tH = r.height; tv.width = tW * tDpr; tv.height = tH * tDpr; }
+addEventListener("resize", tSize); tSize();
+function tStar() { const R = Math.min(tW * 0.3, tH * 0.2, 170); return { x: tW / 2, y: tH * 0.42, R }; }
+function tapFx(x, y) { tPulse = 1; const c = ERA[S.novas % ERA.length][0], st = tStar(); tRings.push({ x: st.x, y: st.y, r: st.R, a: 0.55 });
+  for (let i = 0; i < 12; i++) { const a = Math.random() * 6.28, sp = 90 + Math.random() * 220; tParts.push({ x: st.x + Math.cos(a) * st.R * 0.9, y: st.y + Math.sin(a) * st.R * 0.9, vx: Math.cos(a) * sp, vy: Math.sin(a) * sp, life: 1, c, r: 1.2 + Math.random() * 1.8 }); } }
+function cometFx(x, y, c) { for (let i = 0; i < 60; i++) { const a = Math.random() * 6.28, sp = 60 + Math.random() * 380; tParts.push({ x, y, vx: Math.cos(a) * sp, vy: Math.sin(a) * sp, life: 1.3, c, r: 1.5 + Math.random() * 2.5 }); } tRings.push({ x, y, r: 6, a: 0.9 }); }
+tv.addEventListener("pointerdown", (e) => { e.preventDefault(); lastInput = performance.now(); const b = tv.getBoundingClientRect(), x = e.clientX - b.left, y = e.clientY - b.top;
+  if (tc && Math.hypot(x - tc.x, y - tc.y) < 46) return catchComet(); tapStar(e.clientX, e.clientY, b); });
+function drawTap(dt, t) {
+  if (tv.clientWidth !== Math.round(tW) || tv.clientHeight !== Math.round(tH)) tSize(); if (!tW) return;
+  const [c0, c1] = ERA[S.novas % ERA.length], st = tStar(), frz = frenzyUntil > now();
+  tx.setTransform(tDpr, 0, 0, tDpr, 0, 0); tx.globalCompositeOperation = "source-over";
+  // background: near-black with a faint wash of the star's color
+  const bg = tx.createRadialGradient(st.x, st.y, 0, st.x, st.y, Math.max(tW, tH) * 0.9); bg.addColorStop(0, c1 + "33"); bg.addColorStop(0.45, "#07060c"); bg.addColorStop(1, "#030307"); tx.fillStyle = bg; tx.fillRect(0, 0, tW, tH);
+  for (const d of tDots) { const a = 0.35 + 0.35 * Math.sin(t * d.s + d.p); tx.globalAlpha = a; tx.fillStyle = "#fff"; tx.beginPath(); tx.arc(d.x * tW, ((d.y * tH + t * d.s * 2) % tH), d.r, 0, 6.28); tx.fill(); } tx.globalAlpha = 1;
+  tPulse *= Math.pow(0.02, dt); tRot += dt * 0.05; const R = st.R * (1 + tPulse * 0.07 + Math.sin(t * 1.4) * 0.008);
+  tx.globalCompositeOperation = "lighter";
+  // glow + slow rays
+  const gl = tx.createRadialGradient(st.x, st.y, R * 0.6, st.x, st.y, R * (2.6 + tPulse * 0.4)); gl.addColorStop(0, c0 + "66"); gl.addColorStop(0.35, c1 + "2a"); gl.addColorStop(1, c1 + "00"); tx.fillStyle = gl; tx.beginPath(); tx.arc(st.x, st.y, R * 3, 0, 6.28); tx.fill();
+  tx.save(); tx.translate(st.x, st.y); tx.rotate(tRot);
+  for (let i = 0; i < 14; i++) { tx.rotate(6.283 / 14); const L = R * (1.7 + 0.25 * Math.sin(t * 0.7 + i * 1.9)); const rg = tx.createLinearGradient(0, 0, L, 0); rg.addColorStop(0, c0 + "40"); rg.addColorStop(1, c0 + "00"); tx.fillStyle = rg; tx.beginPath(); tx.moveTo(R * 0.8, -R * 0.05); tx.lineTo(L, 0); tx.lineTo(R * 0.8, R * 0.05); tx.fill(); }
+  tx.restore(); tx.globalCompositeOperation = "source-over";
+  // body
+  const bd = tx.createRadialGradient(st.x - R * 0.25, st.y - R * 0.3, R * 0.05, st.x, st.y, R); bd.addColorStop(0, "#ffffff"); bd.addColorStop(0.35, c0); bd.addColorStop(1, c1); tx.fillStyle = bd; tx.beginPath(); tx.arc(st.x, st.y, R, 0, 6.28); tx.fill();
+  const rim = tx.createRadialGradient(st.x, st.y, R * 0.8, st.x, st.y, R); rim.addColorStop(0, c1 + "00"); rim.addColorStop(1, c1 + "aa"); tx.fillStyle = rim; tx.fill();
+  if (frz) { tx.strokeStyle = "rgba(255,77,94," + (0.35 + 0.25 * Math.sin(t * 8)) + ")"; tx.lineWidth = 3; tx.beginPath(); tx.arc(st.x, st.y, R * 1.12, 0, 6.28); tx.stroke(); }
+  // rings + sparks
+  tx.globalCompositeOperation = "lighter";
+  tRings = tRings.filter((r) => (r.r += dt * 260, r.a -= dt * 0.9) > 0); for (const r of tRings) { tx.strokeStyle = c0; tx.globalAlpha = r.a; tx.lineWidth = 2; tx.beginPath(); tx.arc(r.x, r.y, r.r, 0, 6.28); tx.stroke(); }
+  tParts = tParts.filter((p) => (p.life -= dt * 1.4) > 0).slice(-500); for (const p of tParts) { p.x += p.vx * dt; p.y += p.vy * dt; p.vx *= 0.97; p.vy *= 0.97; tx.globalAlpha = Math.min(1, p.life); tx.fillStyle = p.c; tx.beginPath(); tx.arc(p.x, p.y, p.r, 0, 6.28); tx.fill(); }
+  tx.globalAlpha = 1;
+  // comet: streaks across the screen while the game's comet is out
+  if (comet && !tc) { const fromL = Math.random() < 0.5, up = Math.random() < 0.5, y0 = tH * (up ? 0.1 + Math.random() * 0.08 : 0.66 + Math.random() * 0.08), y1 = y0 + tH * (Math.random() * 0.12 - 0.06); tc = { x0: fromL ? -40 : tW + 40, y0, x1: fromL ? tW + 40 : -40, y1, k: 0, hist: [] }; }
+  if (tc && tc.x0 !== undefined) { tc.k += dt / 6.5; const e = tc.k; tc.x = tc.x0 + (tc.x1 - tc.x0) * e; tc.y = tc.y0 + (tc.y1 - tc.y0) * e + Math.sin(e * 3.14) * (tc.y0 < tH / 2 ? 24 : -24); tc.hist.unshift([tc.x, tc.y]); if (tc.hist.length > 40) tc.hist.pop();
+    for (let i = tc.hist.length - 1; i > 0; i--) { const f = 1 - i / tc.hist.length; tx.strokeStyle = `rgba(255,${190 + f * 50 | 0},${120 + f * 100 | 0},${f * 0.8})`; tx.lineWidth = 1 + f * 7; tx.lineCap = "round"; tx.beginPath(); tx.moveTo(tc.hist[i][0], tc.hist[i][1]); tx.lineTo(tc.hist[i - 1][0], tc.hist[i - 1][1]); tx.stroke(); }
+    const hg = tx.createRadialGradient(tc.x, tc.y, 0, tc.x, tc.y, 26); hg.addColorStop(0, "#ffffff"); hg.addColorStop(0.3, "#ffe3a8cc"); hg.addColorStop(1, "#ffb34700"); tx.fillStyle = hg; tx.beginPath(); tx.arc(tc.x, tc.y, 26, 0, 6.28); tx.fill();
+    if (e >= 1) { tc = null; if (comet) endComet(); } }
+  tx.globalCompositeOperation = "source-over";
+}
 /* KING_CINE: cinema mode, hides UI and flies a slow tour */
 let cine = false, cineT = 0, cineAuto = false, lastInput = performance.now(), visitT = 0; const setCine = (v, auto = false) => { cine = v; cineAuto = v && auto; visitT = 0; $("app").classList.toggle("cine", v); focus = null; cineT = 0; setTimeout(resize, 30); };
 $("cine").onclick = () => setCine(!cine);
@@ -315,14 +360,15 @@ function tapStar(cx, cy, b) {
   const v = tapVal(); S.dust += v; S.total += v; S.allTime += v; S.taps++; starPulse = 1; shake = Math.min(1, shake + 0.25);
   const hit = ray.ray.closestPointToPoint(star.position, new THREE.Vector3()).sub(star.position); if (hit.lengthSq() < 1e-6) hit.set(Math.random() - 0.5, Math.random() - 0.5, Math.random() - 0.5); hit.setLength(3.1).add(star.position);
   burst(hit, ERA[S.novas % ERA.length][0], 14, 5);
-  floatText(cx - b.left, cy - b.top, "+" + fmt(v)); tapSound(); buzz(6); $("hint").classList.add("gone"); render();
+  if (tapMode) tapFx(cx - b.left, cy - b.top); floatText(cx - b.left, cy - b.top, "+" + fmt(v)); tapSound(); buzz(6); $("hint").classList.add("gone"); render();
 }
 function floatText(x, y, t, big) { const d = document.createElement("div"); d.className = "float" + (big ? " big" : ""); d.textContent = t; d.style.left = x + (Math.random() - 0.5) * 30 + "px"; d.style.top = y - 12 + "px"; $("floats").appendChild(d); setTimeout(() => d.remove(), 1100); }
 function catchComet() {
   S.comets++; const ps = perSec(), pt = comet.p.clone(); let msg;
   if (Math.random() < 0.55 || ps === 0) { const g = Math.max(ps * 90, tapVal() * 40, 25); S.dust += g; S.total += g; S.allTime += g; msg = `☄️ Comet! +${fmt(g)} stardust`; burst(pt, "#ffc65c", 120, 9); }
   else { frenzyUntil = now() + 20000; msg = "☄️ Frenzy! Everything ×7 for 20s"; burst(pt, "#ff4d5e", 140, 10); }
-  const sp = pt.clone().project(camera); floatText((sp.x + 1) / 2 * W, (1 - sp.y) / 2 * H, msg.split("! ")[1] || msg, true);
+  if (tapMode && tc) { floatText(tc.x, tc.y, msg.split("! ")[1] || msg, true); cometFx(tc.x, tc.y, msg.includes("Frenzy") ? "#ff4d5e" : "#ffc65c"); tc = null; }
+  else { const sp = pt.clone().project(camera); floatText((sp.x + 1) / 2 * W, (1 - sp.y) / 2 * H, msg.split("! ")[1] || msg, true); }
   endComet(); toast(msg); tone(1320, 0.35, "triangle", 0.06, 1.2); tone(1760, 0.5, "sine", 0.04, 1.1); buzz([20, 30, 20]);
 }
 
@@ -432,7 +478,7 @@ function frame() {
   bGeo.attributes.position.needsUpdate = true; bGeo.attributes.color.needsUpdate = true;
   if (shockT >= 0) { shockT += dt; const s = 3 + shockT * 60; shock.scale.setScalar(s); shock.material.uniforms.uI.value = Math.max(0, 3 * (1 - shockT / 1.4)); if (shockT > 1.4) { shockT = -1; shock.visible = false; } }
   bloom.strength = (0.4 + 0.5 * THREE.MathUtils.smoothstep(camera.position.distanceTo(star.position), 7, 22)) + starPulse * 0.5 + (frenzyUntil > now() ? 0.4 : 0) + (shockT >= 0 ? 1.5 : 0);
-  if (window.__raw) renderer.render(scene, camera); else composer.render();
+  if (tapMode) drawTap(dt, t); else if (window.__raw) renderer.render(scene, camera); else composer.render();
   uiAcc += dt; saveAcc += dt;
   if (uiAcc > 0.1) { uiAcc = 0; render(); for (const [id, n, f] of ACH) if (!S.ach[id] && f(S)) { S.ach[id] = 1; toast(`🏆 ${n}`); tone(1180, 0.25, "triangle", 0.05, 1.2); } }
   if (saveAcc > 10) { saveAcc = 0; save(); }
@@ -443,4 +489,4 @@ document.addEventListener("visibilitychange", () => { if (document.hidden) save(
 window.addEventListener("pagehide", save);
 $("snd").innerHTML = S.sound ? SPK_ON : SPK_OFF;
 resize(); setEra(); offline(); syncBodies(); if (S.taps) $("hint").classList.add("gone"); shown = S.dust; render(); requestAnimationFrame(frame);
-window.__dbg = { iso: () => { scene.children.forEach((c) => { if (c !== star && c !== corona1) c.visible = false; }); flare.visible = false; }, proj: () => { const r = new THREE.Vector3().setFromMatrixColumn(camera.matrixWorld, 0).multiplyScalar(3), u = new THREE.Vector3().setFromMatrixColumn(camera.matrixWorld, 1).multiplyScalar(3); const c = new THREE.Vector3().project(camera), a = r.clone().project(camera), b = u.clone().project(camera); return [c.x, c.y, (a.x - c.x) * W / 2, (b.y - c.y) * H / 2, camera.aspect, W, H, renderer.domElement.width, renderer.domElement.height, camera.projectionMatrix.elements[0], camera.projectionMatrix.elements[5]]; }, cam: () => [camera.aspect, camera.fov, W, H, renderer.getSize(new THREE.Vector2()).toArray(), renderer.getViewport(new THREE.Vector4()).toArray(), renderer.getCurrentViewport(new THREE.Vector4()).toArray(), renderer.getContext().getParameter(renderer.getContext().VIEWPORT), renderer.getContext().drawingBufferWidth, renderer.getContext().drawingBufferHeight], S: () => S, set: (o) => { Object.assign(S, o); syncBodies(); lastHTML = ""; render(); }, comet: spawnComet, focus: (id, i = 0, z) => { focus = bodies[id][i]; focusLock = 0; setZoom(Math.log((focus.size || 1) * (z || 7) / camDist)); }, zoom: (z) => setZoom(z) };
+window.__comet = () => spawnComet(); window.__tc = () => tc && [tc.x, tc.y]; window.__dbg = { iso: () => { scene.children.forEach((c) => { if (c !== star && c !== corona1) c.visible = false; }); flare.visible = false; }, proj: () => { const r = new THREE.Vector3().setFromMatrixColumn(camera.matrixWorld, 0).multiplyScalar(3), u = new THREE.Vector3().setFromMatrixColumn(camera.matrixWorld, 1).multiplyScalar(3); const c = new THREE.Vector3().project(camera), a = r.clone().project(camera), b = u.clone().project(camera); return [c.x, c.y, (a.x - c.x) * W / 2, (b.y - c.y) * H / 2, camera.aspect, W, H, renderer.domElement.width, renderer.domElement.height, camera.projectionMatrix.elements[0], camera.projectionMatrix.elements[5]]; }, cam: () => [camera.aspect, camera.fov, W, H, renderer.getSize(new THREE.Vector2()).toArray(), renderer.getViewport(new THREE.Vector4()).toArray(), renderer.getCurrentViewport(new THREE.Vector4()).toArray(), renderer.getContext().getParameter(renderer.getContext().VIEWPORT), renderer.getContext().drawingBufferWidth, renderer.getContext().drawingBufferHeight], S: () => S, set: (o) => { Object.assign(S, o); syncBodies(); lastHTML = ""; render(); }, comet: spawnComet, focus: (id, i = 0, z) => { focus = bodies[id][i]; focusLock = 0; setZoom(Math.log((focus.size || 1) * (z || 7) / camDist)); }, zoom: (z) => setZoom(z) };
