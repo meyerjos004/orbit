@@ -2,7 +2,7 @@
 (function () {
   "use strict";
   if (!window.matchMedia) return;
-  var mq = matchMedia("(max-width: 899px)"), MIN = 15, MAX = 85, SNAPS = [15, 45, 85], KEY = "orbit.sheet.h";
+  var mq = matchMedia("(max-width: 899px)"), MIN = 15, MAX = 85, SNAPS = [15, 30, 45, 85], KEY = "orbit.sheet.h";
   var sheet = document.getElementById("sheet"); if (!sheet) return;
   var st = document.createElement("style");
   st.textContent = "\
@@ -51,7 +51,7 @@
   function up(e) {
     if (!sheet.classList.contains("dragging")) return;
     sheet.classList.remove("dragging"); e.stopPropagation();
-    set(moved ? snap(h, vel) : (h < 30 ? 45 : MIN), true);   // a tap toggles small <-> half
+    set(moved ? snap(h, vel) : (h < 22 ? 30 : MIN), true);   // a tap toggles small <-> 30%
     setTimeout(nudge, 300);
   }
   grip.addEventListener("pointerdown", down);
