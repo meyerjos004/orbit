@@ -1,11 +1,11 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-<script>/* KING_FRESH */window.ORBIT_V="794084";fetch("version.json?"+Date.now(),{cache:"no-store"}).then(r=>r.json()).then(j=>{if(j.v!==window.ORBIT_V&&sessionStorage.getItem("orbit.vtry")!==j.v){sessionStorage.setItem("orbit.vtry",j.v);location.replace(location.pathname+"?v="+j.v)}}).catch(()=>{});</script>
+<script>/* KING_FRESH */window.ORBIT_V="794576";fetch("version.json?"+Date.now(),{cache:"no-store"}).then(r=>r.json()).then(j=>{if(j.v!==window.ORBIT_V&&sessionStorage.getItem("orbit.vtry")!==j.v){sessionStorage.setItem("orbit.vtry",j.v);location.replace(location.pathname+"?v="+j.v)}}).catch(()=>{});</script>
 
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover,user-scalable=no">
-<meta name="theme-color" content="#0a0a0d">
+<meta name="theme-color" content="#1a0840">
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
@@ -15,6 +15,7 @@
 <link rel="manifest" href="manifest.json">
 
 <title>HELIOS</title>
+<link rel="preconnect" href="https://fonts.googleapis.com"><link rel="preconnect" href="https://fonts.gstatic.com" crossorigin><link href="https://fonts.googleapis.com/css2?family=Pixelify+Sans:wght@400;500;600;700&display=swap" rel="stylesheet">
 <style>
 :root{--bg:#0a0a0d;--panel:#111116;--txt:#ecebf3;--mut:#8b8a99;--acc:#a78bfa;--acc2:#7c3aed;--red:#ff4d5e;--up:#2bd4a0;--amb:#ffc65c;--blue:#7aa7ff;--glass:rgba(14,14,20,.62);--edge:rgba(255,255,255,.09)}
 *{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
@@ -147,6 +148,62 @@ html,body{margin:0;height:100%;background:var(--bg);color:var(--txt);font:14px/1
 #hud,#floats{z-index:3}
 #rail{z-index:4}
 #modesw{z-index:6}
+
+/* ===== KING_PIXEL: HELIOS neon arcade theme (overrides everything above) ===== */
+:root{--bg:#1a0840;--panel:#22105a;--txt:#fff6ff;--mut:#c9a8ff;--acc:#00f0ff;--acc2:#ff2ea6;--red:#ff2e6e;--up:#7dff3a;--amb:#ffe600;--blue:#2d7bff;--glass:#2a1468;--edge:#5a2ab8;--ink:#0a0320}
+html,body{background:#1a0840;font-family:"Pixelify Sans",ui-monospace,monospace;letter-spacing:.01em}
+button,input{font-family:inherit}
+#cv{visibility:hidden}#tapv{display:block!important;z-index:1;image-rendering:pixelated;image-rendering:crisp-edges}
+#zoombar,#cine,#labels{display:none!important}
+.lbl{color:var(--acc);letter-spacing:.14em;font-weight:600;text-shadow:2px 2px 0 var(--ink)}
+#dust{font-weight:700;font-size:44px;letter-spacing:0;color:#fff;text-shadow:3px 3px 0 var(--acc2),6px 6px 0 var(--ink)}
+.pill,.icbtn,#modesw,#hint,#frenzy{border-radius:0!important;background:var(--glass)!important;border:2px solid var(--edge)!important;box-shadow:3px 3px 0 var(--ink);backdrop-filter:none!important;-webkit-backdrop-filter:none!important}
+.pill.g b{color:var(--up)}.pill b{color:#fff}
+#modesw{padding:3px}#modesw button{border-radius:0!important;font:600 13px "Pixelify Sans",monospace!important;color:var(--mut)!important}
+#modesw button.on{background:var(--acc)!important;color:var(--ink)!important}
+#frenzy{color:var(--amb)!important;border-color:var(--amb)!important}
+.float{font-weight:700;font-size:16px;color:#fff;text-shadow:2px 2px 0 var(--acc2),3px 3px 0 var(--ink)!important}.float.big{color:var(--amb);font-size:22px}
+#sheet{background:#1d0b4a!important;border-top:3px solid var(--acc2)!important;backdrop-filter:none!important;-webkit-backdrop-filter:none!important}
+#sheet::before{display:none}
+.tab{border-radius:0!important;border:2px solid var(--edge)!important;color:var(--mut)!important;font-weight:600;box-shadow:2px 2px 0 var(--ink)}
+.tab.on{background:var(--acc)!important;color:var(--ink)!important;border-color:var(--acc)!important}
+.tab.new::after{border-radius:0;background:var(--up);box-shadow:none}
+.row{border-radius:0!important;background:#2a1468!important;border:2px solid #3e1f8f!important;box-shadow:3px 3px 0 var(--ink)}
+.row.ok{border-color:var(--acc)!important;background:linear-gradient(90deg,#123a7a,#2a1468)!important}
+.row.ok:hover{border-color:#9ff8ff!important}
+.row:active{transform:translate(2px,2px);box-shadow:1px 1px 0 var(--ink)}
+.nm{font-weight:600;font-size:15px}.ds,.own,.ms{color:var(--mut)}
+.bar{border-radius:0;background:#3e1f8f;height:4px}.bar i{border-radius:0;background:repeating-linear-gradient(90deg,var(--acc2) 0 4px,var(--amb) 4px 8px)!important}
+.cost{font-weight:700;color:var(--amb)}.cost::before{border-radius:0;transform:none;width:8px;height:8px;background:var(--acc);box-shadow:2px 2px 0 var(--ink)}
+.row.no .cost{color:var(--mut)}
+.ico{border-radius:0!important;background:#14063a center/contain no-repeat!important;border:2px solid #3e1f8f!important;image-rendering:pixelated;box-shadow:inset 0 0 0 2px #1d0b4a}
+.ico::before,.ico::after{display:none!important}
+.card{border-radius:0!important;background:#2a1468!important;border:2px solid var(--edge)!important;box-shadow:3px 3px 0 var(--ink)}
+.big{font-weight:700}.big.up{color:var(--up)}
+.cta{border-radius:0!important;border:2px solid var(--ink)!important;background:var(--acc)!important;color:var(--ink)!important;font-weight:700;box-shadow:3px 3px 0 var(--ink)}
+.cta:active{transform:translate(2px,2px);box-shadow:1px 1px 0 var(--ink)}
+.cta.red{background:var(--acc2)!important;color:#fff!important}.cta.ghost{background:transparent!important;color:var(--mut)!important;border-color:var(--edge)!important}
+.kv{border-bottom:2px dotted #3e1f8f}
+.ach{border-radius:0!important;border:2px solid var(--edge)!important}.ach.got{border-color:var(--up)!important;background:#1d4a3a!important;color:#fff}
+#toast{border-radius:0!important;background:var(--glass)!important;border:2px solid var(--acc)!important;box-shadow:3px 3px 0 var(--ink);font-weight:600}
+#rail .rb{border-radius:0!important;background:#14063a!important;border:2px solid #3e1f8f!important;box-shadow:2px 2px 0 var(--ink)}
+#rail .rb.ok{border-color:var(--up)!important}#rail .rb b{border-radius:0!important}
+#rail .rb .ico{border:0!important;box-shadow:none;background-color:transparent!important}
+.sheet-grip,#sheet .grip{border-radius:0!important}
+@media (prefers-reduced-motion:reduce){.row:active,.cta:active{transform:none}}
+
+/* KING_HOWTO: one-time "update your home-screen app" card */
+#howto{position:fixed;inset:0;z-index:60;display:grid;place-items:center;padding:20px;background:rgba(10,3,32,.72)}
+#howto .hc{width:min(360px,100%);background:#22105a;border:3px solid var(--acc);box-shadow:6px 6px 0 var(--ink);padding:18px 18px 16px;color:var(--txt);animation:hpop .35s cubic-bezier(.2,1.4,.4,1) both}
+@keyframes hpop{from{opacity:0;transform:translateY(10px) scale(.96)}to{opacity:1;transform:none}}
+#howto h2{margin:0 0 4px;font:700 22px "Pixelify Sans",monospace;color:#fff;text-shadow:2px 2px 0 var(--acc2)}
+#howto p{margin:0 0 12px;color:var(--mut);font-size:14px}
+#howto ol{margin:0 0 14px;padding-left:22px;display:flex;flex-direction:column;gap:8px;font-size:15px}
+#howto li::marker{color:var(--amb);font-weight:700}
+#howto a{display:block;margin-top:6px;padding:10px 12px;background:#14063a;border:2px dashed var(--amb);color:var(--amb);font-weight:700;text-decoration:none;word-break:break-all;-webkit-touch-callout:default}
+#howto b{color:#fff}
+#howto img{width:56px;height:56px;image-rendering:pixelated;float:right;margin:0 0 6px 10px;border:2px solid var(--ink)}
+@media (prefers-reduced-motion:reduce){#howto .hc{animation:none}}
 </style>
 </head>
 <body>
@@ -175,8 +232,17 @@ html,body{margin:0;height:100%;background:var(--bg);color:var(--txt);font:14px/1
   </div>
 </div>
 <div id="toast" role="status" aria-live="polite"></div>
-<script src="cloud.js?v=794084"></script>
-<script src="app.js?v=794084"></script>
-<script src="sheet.js?v=794084"></script>
+<script src="cloud.js?v=794576"></script>
+<script src="app.js?v=794576"></script>
+<script src="sheet.js?v=794576"></script>
+<script>/* KING_HOWTO: shown once per device after the HELIOS redesign */
+(function () { try { if (localStorage.getItem("helios.howto") || !localStorage.getItem("kairos.orbit.v2")) return; } catch (e) { return; }
+  var u = location.origin + location.pathname, d = document.createElement("div"); d.id = "howto"; d.setAttribute("role", "dialog"); d.setAttribute("aria-modal", "true"); d.setAttribute("aria-labelledby", "howto-h");
+  d.innerHTML = '<div class="hc"><img src="icon-180.png" alt=""><h2 id="howto-h">HELIOS got a new look</h2><p>Put the new app on your home screen:</p><ol>' +
+    '<li>In Safari, <b>hold down</b> on this link:<a href="' + u + '">' + u.replace(/^https?:\/\//, "") + '</a></li><li>Tap <b>Share</b></li><li>Scroll down, tap <b>Add to Home Screen</b></li><li><b>Delete the old app</b> from your home screen</li></ol>' +
+    '<button class="cta" id="howto-ok">Got it</button></div>';
+  document.body.appendChild(d); var done = function () { try { localStorage.setItem("helios.howto", "1"); } catch (e) {} d.remove(); window.dispatchEvent(new Event("helios-howto-done")); };
+  document.getElementById("howto-ok").onclick = done; d.addEventListener("keydown", function (e) { if (e.key === "Escape") done(); }); setTimeout(function () { document.getElementById("howto-ok").focus(); }, 50); })();
+</script>
 </body>
 </html>

@@ -126,7 +126,7 @@ const flare = new Lensflare(); const flareEls = [new LensflareElement(flareTex("
 flareEls.forEach((e) => flare.addElement(e)); star.add(flare);
 const starLight = new THREE.PointLight(0xffffff, 3, 0, 0); scene.add(starLight); // used by standard materials (dyson panels)
 scene.add(new THREE.AmbientLight(0x404050, 0.4));
-function setEra() { const [a, b] = ERA[S.novas % ERA.length]; starMat.uniforms.uA.value.set(a); starMat.uniforms.uB.value.set(b); coronaMat.uniforms.uA.value.set(a); coronaMat.uniforms.uB.value.set(b); flare.children?.length; flareEls.forEach((e, i) => e.color.set(i ? b : a)); starLight.color.set(a); PL.forEach((m) => m.uniforms.uStar.value.set(a)); }
+function setEra() { try { sprCache && sprCache.clear(); pixIcons && pixIcons(); } catch (e) {} const [a, b] = ERA[S.novas % ERA.length]; starMat.uniforms.uA.value.set(a); starMat.uniforms.uB.value.set(b); coronaMat.uniforms.uA.value.set(a); coronaMat.uniforms.uB.value.set(b); flare.children?.length; flareEls.forEach((e, i) => e.color.set(i ? b : a)); starLight.color.set(a); PL.forEach((m) => m.uniforms.uStar.value.set(a)); }
 
 // Planet materials
 const PL = [];
@@ -297,54 +297,117 @@ modeSw.innerHTML = `<button role="tab" data-m="tap">Tap</button><button role="ta
 ["pointerdown", "touchstart", "mousedown"].forEach((ev) => modeSw.addEventListener(ev, (e) => e.stopPropagation(), { passive: true }));
 function setMode(m, quiet) { tapMode = m === "tap"; try { localStorage.setItem("orbit.mode", m); } catch (e) {} $("app").classList.toggle("tapmode", tapMode);
   modeSw.querySelectorAll("button").forEach((b) => { const on = b.dataset.m === m; b.classList.toggle("on", on); b.setAttribute("aria-selected", on); });
-  if (cine) setCine(false); focus = null; setZoom(tapMode ? Math.log(14 / camDist) : 0); if (!quiet) tone(tapMode ? 520 : 780, 0.08, "sine", 0.03, 1.1); }
+  if (cine) setCine(false); focus = null; vZoom = 1; vPanX = vPanY = 0; if (!quiet) tone(tapMode ? 520 : 780, 0.08, "sine", 0.03, 1.1); }
 modeSw.addEventListener("click", (e) => { const b = e.target.closest("[data-m]"); if (b) setMode(b.dataset.m); });
 setTimeout(() => setMode(tapMode ? "tap" : "view", true), 0);
 
-/* KING_TAPVIEW: Tap is its own simple 2D screen: one big star, tap anywhere, comets streak across. */
-const tv = document.createElement("canvas"); tv.id = "tapv"; tv.setAttribute("aria-label", "Tap anywhere to collect stardust. Tap comets for a bonus."); $("stage").insertBefore(tv, $("labels"));
-const tx = tv.getContext("2d"); let tW = 0, tH = 0, tDpr = 1, tc = null, tPulse = 0, tRot = 0;
-const tDots = Array.from({ length: 140 }, () => ({ x: Math.random(), y: Math.random(), r: Math.random() * 1.3 + 0.3, p: Math.random() * 6.28, s: 0.4 + Math.random() * 1.6 }));
+/* KING_PIXEL (King, Nov 15): HELIOS goes pixel. Neon arcade on a colorful nebula. One low-res canvas, scaled up crisp,
+   draws both screens: Tap (one big sun, tap anywhere) and View (the whole system, drag to pan, pinch/scroll to zoom). */
+const tv = document.createElement("canvas"); tv.id = "tapv"; tv.setAttribute("aria-label", "Your star system. Tap the sun to collect stardust. Tap comets for a bonus."); $("stage").insertBefore(tv, $("labels"));
+const tx = tv.getContext("2d"), pc = document.createElement("canvas"), px = pc.getContext("2d"), bgc = document.createElement("canvas");
+let tW = 0, tH = 0, tDpr = 1, PXS = 3, LW = 0, LH = 0, tc = null, tPulse = 0, tRot = 0, vZoom = 1, vPanX = 0, vPanY = 0;
 let tParts = [], tRings = [];
-function tSize() { const r = tv.getBoundingClientRect(); if (!r.width) return; tDpr = Math.min(2, devicePixelRatio || 1); tW = r.width; tH = r.height; tv.width = tW * tDpr; tv.height = tH * tDpr; }
+const SUNPAL = [["#fffbd0", "#ffe600", "#ff8a00", "#ff2e6e"], ["#eaffff", "#00f0ff", "#2d7bff", "#7a2cff"], ["#ffffff", "#e6ccff", "#b86bff", "#ff2ea6"], ["#fff0fb", "#ff8ad8", "#ff2ea6", "#9b1cff"], ["#f4ffe0", "#7dff3a", "#00d68f", "#00a3ff"]];
+const BAY = [0, 8, 2, 10, 12, 4, 14, 6, 3, 11, 1, 9, 15, 7, 13, 5], bay = (x, y) => (BAY[(y & 3) * 4 + (x & 3)] + 0.5) / 16;
+const hash = (x, y) => { let h = (x * 374761393 + y * 668265263) | 0; h = (h ^ (h >>> 13)) * 1274126177; return ((h ^ (h >>> 16)) >>> 0) / 4294967296; };
+const hex = (h) => [parseInt(h.slice(1, 3), 16), parseInt(h.slice(3, 5), 16), parseInt(h.slice(5, 7), 16)];
+const pal = () => SUNPAL[S.novas % SUNPAL.length];
+let tDots = [];
+function tSize() { const r = tv.getBoundingClientRect(); if (!r.width) return; tDpr = Math.min(2, devicePixelRatio || 1); tW = r.width; tH = r.height; tv.width = Math.round(tW * tDpr); tv.height = Math.round(tH * tDpr);
+  PXS = Math.max(2, Math.round(Math.min(tW, tH) / 210)); LW = Math.ceil(tW / PXS); LH = Math.ceil(tH / PXS); pc.width = LW; pc.height = LH; bgc.width = LW; bgc.height = LH; paintBg();
+  tDots = Array.from({ length: Math.round(LW * LH / 140) }, (_, i) => ({ x: (hash(i, 7) * LW) | 0, y: (hash(i, 9) * LH) | 0, c: ["#ffffff", "#9ff8ff", "#ffe6ff", "#fff59a"][i % 4], p: hash(i, 3) * 6.28, s: 0.6 + hash(i, 5) * 2.2, big: hash(i, 11) > 0.93 })); }
+// colorful space: violet → blue, dithered bands, two neon nebula clouds
+function paintBg() { const g = bgc.getContext("2d"), im = g.createImageData(LW, LH), d = im.data;
+  const stops = [hex("#3a0f7a"), hex("#2a0e63"), hex("#1a1a6e"), hex("#0c2d7a")], neb = [[0.25, 0.3, hex("#ff2ea6"), 0.42], [0.78, 0.7, hex("#00c8ff"), 0.38], [0.6, 0.15, hex("#7a2cff"), 0.3]];
+  for (let y = 0; y < LH; y++) for (let x = 0; x < LW; x++) { const f = (y / LH) * (stops.length - 1), k = Math.min(stops.length - 2, Math.floor(f)), fr = f - k, c = fr > bay(x, y) ? stops[k + 1] : stops[k];
+    let r = c[0], gg = c[1], b = c[2];
+    for (const [nx, ny, nc, na] of neb) { const dx = x / LW - nx, dy = (y / LH - ny) * (LH / LW), q = Math.max(0, 1 - Math.sqrt(dx * dx + dy * dy) / na); const w = q * q * 0.55 + (hash(x >> 2, y >> 2) - 0.5) * 0.08 * q; if (w > bay(x + 1, y + 2) * 0.9) { r = r * 0.55 + nc[0] * 0.45; gg = gg * 0.55 + nc[1] * 0.45; b = b * 0.55 + nc[2] * 0.45; } }
+    const i = (y * LW + x) * 4; d[i] = r; d[i + 1] = gg; d[i + 2] = b; d[i + 3] = 255; }
+  g.putImageData(im, 0, 0); }
 addEventListener("resize", tSize); tSize();
-function tStar() { const R = Math.min(tW * 0.3, tH * 0.2, 170); return { x: tW / 2, y: tH * 0.42, R }; }
-function tapFx(x, y) { tPulse = 1; const c = ERA[S.novas % ERA.length][0], st = tStar(); tRings.push({ x: st.x, y: st.y, r: st.R, a: 0.55 });
-  for (let i = 0; i < 12; i++) { const a = Math.random() * 6.28, sp = 90 + Math.random() * 220; tParts.push({ x: st.x + Math.cos(a) * st.R * 0.9, y: st.y + Math.sin(a) * st.R * 0.9, vx: Math.cos(a) * sp, vy: Math.sin(a) * sp, life: 1, c, r: 1.2 + Math.random() * 1.8 }); } }
-function cometFx(x, y, c) { for (let i = 0; i < 60; i++) { const a = Math.random() * 6.28, sp = 60 + Math.random() * 380; tParts.push({ x, y, vx: Math.cos(a) * sp, vy: Math.sin(a) * sp, life: 1.3, c, r: 1.5 + Math.random() * 2.5 }); } tRings.push({ x, y, r: 6, a: 0.9 }); }
+// dithered pixel disc (the sun and every planet); light from the upper left
+function disc(g, cx, cy, R, P, opt = {}) { cx |= 0; cy |= 0; const RR = R * R, cols = P.map(hex);
+  for (let y = -R; y <= R; y++) for (let x = -R; x <= R; x++) { const q = x * x + y * y; if (q > RR) continue;
+    let v = Math.sqrt(q) / R * 0.75 + (x + y) / (R * 2) * 0.55 + 0.2; if (opt.bands) v = v * 0.5 + (Math.sin((y / R) * opt.bands + opt.ph) * 0.5 + 0.5) * 0.6; if (opt.spots && hash(x + opt.seed, y) > 1 - opt.spots) v -= 0.35;
+    if (opt.land && hash((x + opt.seed * 7) >> 1, y >> 1) > 0.62) { g.fillStyle = opt.land[v + bay(x, y) * 0.3 > 0.6 ? 1 : 0]; g.fillRect(cx + x, cy + y, 1, 1); continue; }
+    const k = Math.max(0, Math.min(cols.length - 1, Math.floor(v * (cols.length - 1) + bay(x + cx, y + cy) * 0.9))); g.fillStyle = P[k]; g.fillRect(cx + x, cy + y, 1, 1); } }
+const sprCache = new Map();
+function sprite(id, i, R) { const key = id + i + ":" + R + ":" + (S.novas % 5); let c = sprCache.get(key); if (c) return c; if (sprCache.size > 300) sprCache.clear();
+  const pad = id === "giant" || id === "hole" || id === "ring" ? R * 2 + 3 : 2, n = (R + pad) * 2 + 1; c = document.createElement("canvas"); c.width = c.height = n; const g = c.getContext("2d"), m = R + pad;
+  const ell = (rx, ry, colA, colB, back) => { for (let a = 0; a < 6.283; a += 0.6 / Math.max(rx, 4)) { const yy = Math.sin(a) * ry; if (back ? yy > 0 : yy < 0) continue; g.fillStyle = (Math.round(a * 9) & 1) ? colA : colB; g.fillRect(m + Math.round(Math.cos(a) * rx), m + Math.round(yy), 1, 1); } };
+  if (id === "moon") disc(g, m, m, R, [["#fbf3ff", "#d6c4ff", "#9a7ce8", "#4b2f8f"], ["#fff6e6", "#ffcfa0", "#d68a5a", "#7a3d2a"], ["#eafff8", "#a8f0e0", "#5fb8b0", "#245a63"], ["#fff0ff", "#ffb8f0", "#d66ad0", "#6a2a8a"]][i % 4], { spots: 0.12, seed: i * 13 });
+  else if (id === "plan") disc(g, m, m, R, i % 4 === 3 ? ["#fff0e0", "#ff9a5a", "#e8502e", "#7a1f3a"] : ["#eaffff", "#00f0ff", "#0098ff", "#2a3db8"], i % 4 === 3 ? { spots: 0.1, seed: i } : { land: ["#2bd44a", "#7dff3a"], seed: i });
+  else if (id === "giant") { const P = [["#fff1d6", "#ffbe5c", "#ff8a00", "#b8325a"], ["#fff6d0", "#ffe08a", "#e0a84a", "#8a5a2a"], ["#e8ffff", "#8af6ff", "#3aa8d8", "#2a4a9a"], ["#e6e0ff", "#9a8aff", "#5b4cff", "#2a1a8a"]][i % 4];
+    if (i % 4 === 1 || i % 4 === 2 || i % 3 === 0) ell(R * 1.9, R * 0.55, "#ff2ea6", "#ffe600", true); disc(g, m, m, R, P, { bands: 9, ph: i }); if (i % 4 === 1 || i % 4 === 2 || i % 3 === 0) ell(R * 1.9, R * 0.55, "#ff2ea6", "#ffe600", false); }
+  else if (id === "ring") { for (let w = 0; w < 2; w++) { ell(R * 1.6 + w, R * 0.6 + w * 0.5, "#00f0ff", "#9ff8ff", true); ell(R * 1.6 + w, R * 0.6 + w * 0.5, "#00f0ff", "#ffffff", false); } disc(g, m, m, Math.max(1, R >> 2), ["#ffffff", "#7dff3a", "#00d68f"]); }
+  else if (id === "pulsar") disc(g, m, m, R, ["#ffffff", "#eaffff", "#9ff8ff", "#00f0ff"]);
+  else if (id === "hole") { ell(R * 1.9, R * 0.5, "#ff8a00", "#ff2e6e", true); disc(g, m, m, R, ["#000000", "#05010f", "#120428", "#ff2ea6"]); ell(R * 1.9, R * 0.5, "#ffe600", "#ff2ea6", false); }
+  sprCache.set(key, c); return c; }
+function sunAt(g, cx, cy, R, t) { const P = pal(); cx |= 0; cy |= 0;
+  // dotted glow halo + slow rays
+  g.fillStyle = P[3]; for (let r = R + 2; r < R + 2 + Math.max(3, R * 0.35); r++) for (let a = 0; a < 6.283; a += 1 / r) { const x = Math.round(cx + Math.cos(a) * r), y = Math.round(cy + Math.sin(a) * r); if (((x + y) & 1) && bay(x, y) < 1 - (r - R) / (R * 0.4 + 3)) g.fillRect(x, y, 1, 1); }
+  for (let k = 0; k < 12; k++) { const a = tRot + k * 0.5236, L = R * (1.35 + 0.22 * Math.sin(t * 1.3 + k * 1.7)) + tPulse * R * 0.3; g.fillStyle = k & 1 ? P[1] : P[2]; for (let r = R + 3; r < L; r += 2) g.fillRect(Math.round(cx + Math.cos(a) * r), Math.round(cy + Math.sin(a) * r), 1, 1); }
+  disc(g, cx, cy, R, P);
+  g.fillStyle = P[0]; const gs = Math.floor(t * 3); for (let k = 0; k < R * 1.5; k++) { const a = hash(k, gs) * 6.283, r = Math.sqrt(hash(k + 99, gs)) * R * 0.85; g.fillRect(Math.round(cx + Math.cos(a) * r), Math.round(cy + Math.sin(a) * r), 1, 1); }
+  if (frenzyUntil > now() && ((t * 8) | 0) & 1) { g.fillStyle = "#ff2e6e"; for (let a = 0; a < 6.283; a += 0.6 / R) g.fillRect(Math.round(cx + Math.cos(a) * (R + 1)), Math.round(cy + Math.sin(a) * (R + 1)), 1, 1); } }
+function tStar() { const R = tapMode ? Math.max(14, Math.min(LW * 0.3, LH * 0.21) * (1 + tPulse * 0.06)) | 0 : Math.max(7, Math.round(3.4 * viewK() * (1 + tPulse * 0.05))); return { x: (LW / 2 + (tapMode ? 0 : vPanX + 8)) | 0, y: (LH * (tapMode ? 0.44 : 0.46) + (tapMode ? 0 : vPanY)) | 0, R }; }
+function viewK() { let far = 12; for (const g of GENS) if (S.own[g.id]) far = Math.max(far, ORB[g.id][1] + 1.5); return vZoom * (Math.min(LW - 18, LH * 2) / 2 - 2) / far; }
+function tapFx(x, y) { tPulse = 1; const P = pal(), st = tStar(); tRings.push({ x: st.x, y: st.y, r: st.R + 1, a: 1 });
+  for (let i = 0; i < 14; i++) { const a = Math.random() * 6.28, sp = 30 + Math.random() * 70; tParts.push({ x: st.x + Math.cos(a) * st.R, y: st.y + Math.sin(a) * st.R, vx: Math.cos(a) * sp, vy: Math.sin(a) * sp, life: 1, c: P[(i % 3)], s: i % 4 ? 1 : 2 }); } }
+function cometFx(x, y, c) { x /= PXS; y /= PXS; for (let i = 0; i < 50; i++) { const a = Math.random() * 6.28, sp = 20 + Math.random() * 110; tParts.push({ x, y, vx: Math.cos(a) * sp, vy: Math.sin(a) * sp, life: 1.3, c: i & 1 ? c : "#ffffff", s: i % 3 ? 1 : 2 }); } tRings.push({ x, y, r: 2, a: 1, c }); }
+// input: Tap = tap anywhere. View = drag to pan, pinch/scroll to zoom, tap the sun or a comet.
+const vp = new Map(); let vDrag = null, vPinch = 0;
 tv.addEventListener("pointerdown", (e) => { e.preventDefault(); lastInput = performance.now(); const b = tv.getBoundingClientRect(), x = e.clientX - b.left, y = e.clientY - b.top;
-  if (tc && Math.hypot(x - tc.x, y - tc.y) < 46) return catchComet(); tapStar(e.clientX, e.clientY, b); });
+  if (tc && Math.hypot(x - tc.x, y - tc.y) < 46) return catchComet();
+  if (tapMode) return tapStar(e.clientX, e.clientY, b);
+  try { tv.setPointerCapture(e.pointerId); } catch (er) {} vp.set(e.pointerId, { x: e.clientX, y: e.clientY }); if (vp.size === 1) vDrag = { x: e.clientX, y: e.clientY, px: vPanX, py: vPanY, moved: 0 }; else if (vp.size === 2) { const [p, q] = [...vp.values()]; vPinch = Math.hypot(p.x - q.x, p.y - q.y) / vZoom; vDrag = null; } });
+tv.addEventListener("pointermove", (e) => { if (tapMode || !vp.has(e.pointerId)) return; vp.set(e.pointerId, { x: e.clientX, y: e.clientY });
+  if (vp.size === 2 && vPinch) { const [p, q] = [...vp.values()]; vZoom = Math.max(0.6, Math.min(4, Math.hypot(p.x - q.x, p.y - q.y) / vPinch)); return; }
+  if (vDrag) { const dx = e.clientX - vDrag.x, dy = e.clientY - vDrag.y; vDrag.moved = Math.max(vDrag.moved, Math.hypot(dx, dy)); vPanX = vDrag.px + dx / PXS; vPanY = vDrag.py + dy / PXS; } });
+const vUp = (e) => { if (tapMode) return; const d = vDrag, was = vp.size; vp.delete(e.pointerId); if (vp.size < 2) vPinch = 0; if (was > 1 || !d) { vDrag = null; return; } vDrag = null;
+  if (d.moved > 8) return; const b = tv.getBoundingClientRect(), st = tStar(), x = (e.clientX - b.left) / PXS, y = (e.clientY - b.top) / PXS; if (Math.hypot(x - st.x, y - st.y) <= st.R + 4) tapStar(e.clientX, e.clientY, b); };
+tv.addEventListener("pointerup", vUp); tv.addEventListener("pointercancel", (e) => { vp.delete(e.pointerId); vDrag = null; vPinch = 0; });
+tv.addEventListener("wheel", (e) => { e.preventDefault(); if (!tapMode) vZoom = Math.max(0.6, Math.min(4, vZoom * Math.exp(-e.deltaY / 400))); }, { passive: false });
+tv.addEventListener("dblclick", () => { vZoom = 1; vPanX = vPanY = 0; });
 function drawTap(dt, t) {
-  if (tv.clientWidth !== Math.round(tW) || tv.clientHeight !== Math.round(tH)) tSize(); if (!tW) return;
-  const [c0, c1] = ERA[S.novas % ERA.length], st = tStar(), frz = frenzyUntil > now();
-  tx.setTransform(tDpr, 0, 0, tDpr, 0, 0); tx.globalCompositeOperation = "source-over";
-  // background: near-black with a faint wash of the star's color
-  const bg = tx.createRadialGradient(st.x, st.y, 0, st.x, st.y, Math.max(tW, tH) * 0.9); bg.addColorStop(0, c1 + "33"); bg.addColorStop(0.45, "#07060c"); bg.addColorStop(1, "#030307"); tx.fillStyle = bg; tx.fillRect(0, 0, tW, tH);
-  for (const d of tDots) { const a = 0.35 + 0.35 * Math.sin(t * d.s + d.p); tx.globalAlpha = a; tx.fillStyle = "#fff"; tx.beginPath(); tx.arc(d.x * tW, ((d.y * tH + t * d.s * 2) % tH), d.r, 0, 6.28); tx.fill(); } tx.globalAlpha = 1;
-  tPulse *= Math.pow(0.02, dt); tRot += dt * 0.05; const R = st.R * (1 + tPulse * 0.07 + Math.sin(t * 1.4) * 0.008);
-  tx.globalCompositeOperation = "lighter";
-  // glow + slow rays
-  const gl = tx.createRadialGradient(st.x, st.y, R * 0.6, st.x, st.y, R * (2.6 + tPulse * 0.4)); gl.addColorStop(0, c0 + "66"); gl.addColorStop(0.35, c1 + "2a"); gl.addColorStop(1, c1 + "00"); tx.fillStyle = gl; tx.beginPath(); tx.arc(st.x, st.y, R * 3, 0, 6.28); tx.fill();
-  tx.save(); tx.translate(st.x, st.y); tx.rotate(tRot);
-  for (let i = 0; i < 14; i++) { tx.rotate(6.283 / 14); const L = R * (1.7 + 0.25 * Math.sin(t * 0.7 + i * 1.9)); const rg = tx.createLinearGradient(0, 0, L, 0); rg.addColorStop(0, c0 + "40"); rg.addColorStop(1, c0 + "00"); tx.fillStyle = rg; tx.beginPath(); tx.moveTo(R * 0.8, -R * 0.05); tx.lineTo(L, 0); tx.lineTo(R * 0.8, R * 0.05); tx.fill(); }
-  tx.restore(); tx.globalCompositeOperation = "source-over";
-  // body
-  const bd = tx.createRadialGradient(st.x - R * 0.25, st.y - R * 0.3, R * 0.05, st.x, st.y, R); bd.addColorStop(0, "#ffffff"); bd.addColorStop(0.35, c0); bd.addColorStop(1, c1); tx.fillStyle = bd; tx.beginPath(); tx.arc(st.x, st.y, R, 0, 6.28); tx.fill();
-  const rim = tx.createRadialGradient(st.x, st.y, R * 0.8, st.x, st.y, R); rim.addColorStop(0, c1 + "00"); rim.addColorStop(1, c1 + "aa"); tx.fillStyle = rim; tx.fill();
-  if (frz) { tx.strokeStyle = "rgba(255,77,94," + (0.35 + 0.25 * Math.sin(t * 8)) + ")"; tx.lineWidth = 3; tx.beginPath(); tx.arc(st.x, st.y, R * 1.12, 0, 6.28); tx.stroke(); }
+  if (tv.clientWidth !== Math.round(tW) || tv.clientHeight !== Math.round(tH)) tSize(); if (!LW) return;
+  const g = px; g.imageSmoothingEnabled = false; g.drawImage(bgc, 0, 0);
+  for (const d of tDots) { if (Math.sin(t * d.s + d.p) < -0.35) continue; g.fillStyle = d.c; const yy = (d.y + ((t * d.s * 1.5) | 0)) % LH; g.fillRect(d.x, yy, 1, 1); if (d.big && Math.sin(t * d.s + d.p) > 0.6) { g.fillRect(d.x - 1, yy, 3, 1); g.fillRect(d.x, yy - 1, 1, 3); } }
+  tPulse *= Math.pow(0.02, dt); tRot += dt * 0.12; const st = tStar();
+  if (tapMode) sunAt(g, st.x, st.y, st.R, t);
+  else { const k = viewK(), tilt = 0.42, P = pal();
+    // orbit lanes
+    g.fillStyle = "rgba(255,255,255,.22)"; for (const id of Object.keys(ORB)) { if (!S.own[id]) continue; const r = (ORB[id][0] + ORB[id][1]) / 2 * k; for (let a = 0; a < 6.283; a += 3 / Math.max(r, 6)) g.fillRect(Math.round(st.x + Math.cos(a) * r), Math.round(st.y + Math.sin(a) * r * tilt), 1, 1); }
+    const items = []; const pt = (r, a) => ({ x: st.x + Math.cos(a) * r * k, y: st.y + Math.sin(a) * r * k * tilt, back: Math.sin(a) < 0 });
+    const nM = Math.min(70, (S.own.mote || 0) * 3), nR = Math.min(180, (S.own.rock || 0) * 6), nD = Math.min(80, (S.own.dyson || 0) * 6);
+    for (let i = 0; i < nM; i++) items.push({ ...pt(ORB.mote[0] + hash(i, 1) * 1.4, i * 2.399 + t * 0.35), dot: i % 3 ? "#ffe600" : "#ffffff" });
+    for (let i = 0; i < nR; i++) items.push({ ...pt(ORB.rock[0] + hash(i, 2) * 2.5, i * 2.399 + t * 0.12), dot: ["#b9a2ff", "#8a6ad8", "#ff8ad8"][i % 3], s: hash(i, 4) > 0.8 ? 2 : 1 });
+    for (let i = 0; i < nD; i++) items.push({ ...pt(ORB.dyson[0] + hash(i, 6) * 1.2, i * 2.399 + t * 0.6), dot: (i + ((t * 4) | 0)) % 5 ? "#00f0ff" : "#ffffff" });
+    const SZ = { moon: 0.6, plan: 1.05, giant: 1.9, ring: 1.2, pulsar: 0.6, hole: 1.1 }, MINR = { moon: 2, plan: 3, giant: 4, ring: 3, pulsar: 2, hole: 3 };
+    for (const id in bodies) bodies[id].forEach((o, i) => { const p = pt(o.r, o.a); items.push({ ...p, spr: sprite(id, i, Math.max(MINR[id], Math.round(SZ[id] * k))), id }); });
+    const drawIt = (it) => { if (it.dot) { g.fillStyle = it.dot; g.fillRect(it.x | 0, it.y | 0, it.s || 1, it.s || 1); return; } g.drawImage(it.spr, Math.round(it.x - it.spr.width / 2), Math.round(it.y - it.spr.height / 2));
+      if (it.id === "pulsar") { g.fillStyle = "#9ff8ff"; const a = t * 3; for (let r = 3; r < 14; r += 1) { g.fillRect(Math.round(it.x + Math.cos(a) * r), Math.round(it.y + Math.sin(a) * r * 0.6), 1, 1); g.fillRect(Math.round(it.x - Math.cos(a) * r), Math.round(it.y - Math.sin(a) * r * 0.6), 1, 1); } } };
+    items.sort((a, b) => a.y - b.y); items.filter((i) => i.back).forEach(drawIt); sunAt(g, st.x, st.y, st.R, t); items.filter((i) => !i.back).forEach(drawIt); }
   // rings + sparks
-  tx.globalCompositeOperation = "lighter";
-  tRings = tRings.filter((r) => (r.r += dt * 260, r.a -= dt * 0.9) > 0); for (const r of tRings) { tx.strokeStyle = c0; tx.globalAlpha = r.a; tx.lineWidth = 2; tx.beginPath(); tx.arc(r.x, r.y, r.r, 0, 6.28); tx.stroke(); }
-  tParts = tParts.filter((p) => (p.life -= dt * 1.4) > 0).slice(-500); for (const p of tParts) { p.x += p.vx * dt; p.y += p.vy * dt; p.vx *= 0.97; p.vy *= 0.97; tx.globalAlpha = Math.min(1, p.life); tx.fillStyle = p.c; tx.beginPath(); tx.arc(p.x, p.y, p.r, 0, 6.28); tx.fill(); }
-  tx.globalAlpha = 1;
-  // comet: streaks across the screen while the game's comet is out
-  if (comet && !tc) { const fromL = Math.random() < 0.5, up = Math.random() < 0.5, y0 = tH * (up ? 0.1 + Math.random() * 0.08 : 0.66 + Math.random() * 0.08), y1 = y0 + tH * (Math.random() * 0.12 - 0.06); tc = { x0: fromL ? -40 : tW + 40, y0, x1: fromL ? tW + 40 : -40, y1, k: 0, hist: [] }; }
-  if (tc && tc.x0 !== undefined) { tc.k += dt / 6.5; const e = tc.k; tc.x = tc.x0 + (tc.x1 - tc.x0) * e; tc.y = tc.y0 + (tc.y1 - tc.y0) * e + Math.sin(e * 3.14) * (tc.y0 < tH / 2 ? 24 : -24); tc.hist.unshift([tc.x, tc.y]); if (tc.hist.length > 40) tc.hist.pop();
-    for (let i = tc.hist.length - 1; i > 0; i--) { const f = 1 - i / tc.hist.length; tx.strokeStyle = `rgba(255,${190 + f * 50 | 0},${120 + f * 100 | 0},${f * 0.8})`; tx.lineWidth = 1 + f * 7; tx.lineCap = "round"; tx.beginPath(); tx.moveTo(tc.hist[i][0], tc.hist[i][1]); tx.lineTo(tc.hist[i - 1][0], tc.hist[i - 1][1]); tx.stroke(); }
-    const hg = tx.createRadialGradient(tc.x, tc.y, 0, tc.x, tc.y, 26); hg.addColorStop(0, "#ffffff"); hg.addColorStop(0.3, "#ffe3a8cc"); hg.addColorStop(1, "#ffb34700"); tx.fillStyle = hg; tx.beginPath(); tx.arc(tc.x, tc.y, 26, 0, 6.28); tx.fill();
+  tRings = tRings.filter((r) => (r.r += dt * 60, r.a -= dt * 1.6) > 0); for (const r of tRings) { g.fillStyle = r.c || pal()[1]; for (let a = 0; a < 6.283; a += 1.2 / r.r) if (bay(Math.round(a * 20), 0) < r.a) g.fillRect(Math.round(r.x + Math.cos(a) * r.r), Math.round(r.y + Math.sin(a) * r.r), 1, 1); }
+  tParts = tParts.filter((p) => (p.life -= dt * 1.5) > 0).slice(-400); for (const p of tParts) { p.x += p.vx * dt; p.y += p.vy * dt; p.vx *= 0.95; p.vy *= 0.95; if (p.life < 0.3 && ((t * 20) | 0) & 1) continue; g.fillStyle = p.c; g.fillRect(p.x | 0, p.y | 0, p.s, p.s); }
+  // comet streaks across while the game's comet is out (screen px kept in tc.x/tc.y for taps)
+  if (comet && !tc) { const fromL = Math.random() < 0.5, up = Math.random() < 0.5, y0 = LH * (up ? 0.12 + Math.random() * 0.08 : 0.68 + Math.random() * 0.08); tc = { x0: fromL ? -10 : LW + 10, y0, x1: fromL ? LW + 10 : -10, y1: y0 + LH * (Math.random() * 0.12 - 0.06), k: 0, hist: [] }; }
+  if (tc && tc.x0 !== undefined) { tc.k += dt / 6.5; const e = tc.k, lx = tc.x0 + (tc.x1 - tc.x0) * e, ly = tc.y0 + (tc.y1 - tc.y0) * e + Math.sin(e * 3.14) * (tc.y0 < LH / 2 ? 8 : -8); tc.x = lx * PXS; tc.y = ly * PXS; tc.hist.unshift([lx | 0, ly | 0]); if (tc.hist.length > 26) tc.hist.pop();
+    const TR = ["#ffffff", "#fff59a", "#ffe600", "#ff8a00", "#ff2ea6", "#b86bff"]; tc.hist.forEach(([hx, hy], i) => { if (i > 10 && (i + ((t * 12) | 0)) & 1) return; g.fillStyle = TR[Math.min(TR.length - 1, (i / 4) | 0)]; const s = i < 4 ? 2 : 1; g.fillRect(hx, hy, s, s); });
+    g.fillStyle = "#ffffff"; g.fillRect((lx | 0) - 1, (ly | 0) - 1, 3, 3); g.fillStyle = "#9ff8ff"; g.fillRect((lx | 0) - 2, ly | 0, 1, 1); g.fillRect((lx | 0) + 2, ly | 0, 1, 1); g.fillRect(lx | 0, (ly | 0) - 2, 1, 1); g.fillRect(lx | 0, (ly | 0) + 2, 1, 1);
     if (e >= 1) { tc = null; if (comet) endComet(); } }
-  tx.globalCompositeOperation = "source-over";
+  tx.setTransform(1, 0, 0, 1, 0, 0); tx.imageSmoothingEnabled = false; tx.drawImage(pc, 0, 0, LW * PXS * tDpr, LH * PXS * tDpr);
 }
+// pixel icons for the shop, drawn by the same sprite code
+function pixIcons() { const css = []; const one = (id, draw) => { const c = document.createElement("canvas"); c.width = c.height = 24; const g = c.getContext("2d"); draw(g); css.push(`.ico-${id}{background-image:url(${c.toDataURL()})!important}`); };
+  const put = (spr) => (g) => g.drawImage(spr, Math.round(12 - spr.width / 2), Math.round(12 - spr.height / 2));
+  one("mote", (g) => { [[12, 12, "#ffffff", 2], [6, 8, "#ffe600", 1], [17, 6, "#ffe600", 1], [18, 16, "#ffffff", 1], [7, 17, "#ff2ea6", 1], [12, 4, "#00f0ff", 1]].forEach(([x, y, c, s]) => { g.fillStyle = c; g.fillRect(x, y, s, s); }); });
+  one("rock", (g) => { disc(g, 10, 12, 5, ["#e6dcff", "#b9a2ff", "#8a6ad8", "#4b2f8f"], { spots: 0.15, seed: 3 }); disc(g, 18, 7, 2, ["#ffd0f0", "#ff8ad8", "#b8325a"]); disc(g, 18, 17, 1, ["#ffd0f0", "#ff8ad8"]); });
+  ["moon", "plan", "giant", "ring", "hole", "pulsar"].forEach((id) => one(id, put(sprite(id, 0, { moon: 7, plan: 8, giant: 5, ring: 6, hole: 4, pulsar: 4 }[id]))));
+  one("dyson", (g) => { disc(g, 12, 12, 3, ["#ffffff", "#ffe600", "#ff8a00"]); g.fillStyle = "#00f0ff"; for (let k = 0; k < 8; k++) { const a = k * 0.785; g.fillRect(Math.round(12 + Math.cos(a) * 8), Math.round(12 + Math.sin(a) * 8), 2, 2); } });
+  let st = document.getElementById("pixicons"); if (!st) { st = document.createElement("style"); st.id = "pixicons"; document.head.appendChild(st); } st.textContent = css.join("\n"); }
+pixIcons();
 /* KING_CINE: cinema mode, hides UI and flies a slow tour */
 let cine = false, cineT = 0, cineAuto = false, lastInput = performance.now(), visitT = 0; const setCine = (v, auto = false) => { cine = v; cineAuto = v && auto; visitT = 0; $("app").classList.toggle("cine", v); focus = null; cineT = 0; setTimeout(resize, 30); };
 $("cine").onclick = () => setCine(!cine);
@@ -363,7 +426,7 @@ function tapStar(cx, cy, b) {
   const v = tapVal(); S.dust += v; S.total += v; S.allTime += v; S.taps++; starPulse = 1; shake = Math.min(1, shake + 0.25);
   const hit = ray.ray.closestPointToPoint(star.position, new THREE.Vector3()).sub(star.position); if (hit.lengthSq() < 1e-6) hit.set(Math.random() - 0.5, Math.random() - 0.5, Math.random() - 0.5); hit.setLength(3.1).add(star.position);
   burst(hit, ERA[S.novas % ERA.length][0], 14, 5);
-  if (tapMode) tapFx(cx - b.left, cy - b.top); floatText(cx - b.left, cy - b.top, "+" + fmt(v)); tapSound(); buzz(6); $("hint").classList.add("gone"); render();
+  tapFx(cx - b.left, cy - b.top); floatText(cx - b.left, cy - b.top, "+" + fmt(v)); tapSound(); buzz(6); $("hint").classList.add("gone"); render();
 }
 function floatText(x, y, t, big) { const d = document.createElement("div"); d.className = "float" + (big ? " big" : ""); d.textContent = t; d.style.left = x + (Math.random() - 0.5) * 30 + "px"; d.style.top = y - 12 + "px"; $("floats").appendChild(d); setTimeout(() => d.remove(), 1100); }
 function catchComet() {
@@ -454,7 +517,7 @@ function frame() {
   if (!comet && now() > nextComet) { spawnComet(); nextComet = now() + (S.ups.t2 ? 0.5 : 1) * (40000 + Math.random() * 50000); }
   // camera: slow drift + flick
   yawVel *= 0.94; camYaw += 0.025 * dt + yawVel;
-  if (!cine && !tapMode && performance.now() - lastInput > 60000) setCine(true, true);
+  /* KING_PIXEL: no cinema in pixel mode */
   if (cine) { visitT += dt; if (visitT > 22) { visitT = 0; if (focus) { focus = null; } else { const pool = Object.keys(bodies).flatMap((k) => bodies[k] || []).filter((b) => b && b.obj && b.obj.visible); if (pool.length) { focus = pool[(Math.random() * pool.length) | 0]; focusLock = 0; } } } }
   if (cine && focus) { cineT += dt; camYaw += 0.08 * dt; zoomT += (Math.log((focus.size || 1) * 5 / camDist) - zoomT) * Math.min(1, dt * 0.6); }
   else if (cine) { cineT += dt; camYaw += 0.05 * dt; zoomT = -1.1 + 1.9 * (0.5 - 0.5 * Math.cos(cineT * 0.09)); camPitch += (0.18 + 0.22 * Math.sin(cineT * 0.05) - camPitch) * Math.min(1, dt * 0.5); } shake *= 0.9; starPulse = Math.max(0, starPulse - dt * 3.5);
@@ -481,7 +544,7 @@ function frame() {
   bGeo.attributes.position.needsUpdate = true; bGeo.attributes.color.needsUpdate = true;
   if (shockT >= 0) { shockT += dt; const s = 3 + shockT * 60; shock.scale.setScalar(s); shock.material.uniforms.uI.value = Math.max(0, 3 * (1 - shockT / 1.4)); if (shockT > 1.4) { shockT = -1; shock.visible = false; } }
   bloom.strength = (0.4 + 0.5 * THREE.MathUtils.smoothstep(camera.position.distanceTo(star.position), 7, 22)) + starPulse * 0.5 + (frenzyUntil > now() ? 0.4 : 0) + (shockT >= 0 ? 1.5 : 0);
-  if (tapMode) drawTap(dt, t); else if (window.__raw) renderer.render(scene, camera); else composer.render();
+  drawTap(dt, t);   // KING_PIXEL: the 3D scene still runs the game logic, but only the pixel canvas is drawn
   uiAcc += dt; saveAcc += dt;
   if (uiAcc > 0.1) { uiAcc = 0; render(); for (const [id, n, f] of ACH) if (!S.ach[id] && f(S)) { S.ach[id] = 1; toast(`🏆 ${n}`); tone(1180, 0.25, "triangle", 0.05, 1.2); } }
   if (saveAcc > 10) { saveAcc = 0; save(); }

@@ -153,7 +153,7 @@
     var tapFocus = function (e) { var t = e.target, i = t.closest && (t.closest("input") || (t.closest(".boxes") && panel.querySelector("#oc-code"))); if (i && document.activeElement !== i) i.focus(); };   // the game swallows taps; focus the field ourselves
     panel.addEventListener("touchend", tapFocus, { passive: true }); panel.addEventListener("click", tapFocus);
     var sk = +ls.get(SKIP) || 0;   // ask on launch until signed in; "Continue without saving" quiets it for 3 days
-    if (!ls.get(TOK) && Date.now() - sk > 3 * 864e5 && !ss.get("orbit.cloud.asked")) { ss.set("orbit.cloud.asked", "1"); setTimeout(open, 900); }
+    if (!ls.get(TOK) && Date.now() - sk > 3 * 864e5 && !ss.get("orbit.cloud.asked")) { ss.set("orbit.cloud.asked", "1"); setTimeout(function () { if (document.getElementById("howto")) window.addEventListener("helios-howto-done", function () { setTimeout(open, 400); }, { once: true }); else open(); }, 900); }
     var tok = ls.get(TOK);
     if (tok) api("load", { token: tok }).then(function (r) {   // another device may have played further
       if (r && r.err === "signed_out") return signOutLocal();
