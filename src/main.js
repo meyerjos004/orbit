@@ -347,10 +347,30 @@ function discS(g, cx, cy, R, P, opt = {}) { if (R <= 0) return; g.save(); g.begi
   if (opt.land) { g.fillStyle = opt.land[1]; for (let k = 0; k < 5; k++) { const a = hash(k, opt.seed | 0) * 6.28, d = hash(k + 9, opt.seed | 0) * R * 0.7; g.beginPath(); g.ellipse(cx + Math.cos(a) * d, cy + Math.sin(a) * d, R * (0.18 + hash(k, 4) * 0.2), R * (0.12 + hash(k, 6) * 0.14), a, 0, 6.283); g.fill(); } }
   if (opt.spots) { g.fillStyle = "rgba(0,0,0,.1)"; for (let k = 0; k < 6; k++) { const a = hash(k, (opt.seed | 0) + 3) * 6.28, d = hash(k + 2, (opt.seed | 0) + 5) * R * 0.75; g.beginPath(); g.arc(cx + Math.cos(a) * d, cy + Math.sin(a) * d, R * (0.08 + hash(k, 8) * 0.12), 0, 6.283); g.fill(); } }
   const sh = g.createRadialGradient(cx - R * 0.3, cy - R * 0.3, R * 0.6, cx, cy, R * 1.02); sh.addColorStop(0, "rgba(0,0,0,0)"); sh.addColorStop(1, "rgba(10,0,40,.35)"); g.fillStyle = sh; g.fillRect(cx - R, cy - R, R * 2, R * 2); g.restore(); }
+
+/* KING_CINEMATIC (Aimee, Nov 15): Smooth = cinematic. AI backgrounds made on King's PC in the style of her reference images
+   (rotate each Supernova, slow drift), textured planets with day/night shading + atmosphere rims, a textured glowing sun. */
+const TXC = {}; function txi(name) { let im = TXC[name]; if (im) return im.ok ? im : null; im = TXC[name] = new Image(); im.onload = () => { im.ok = true; sprCache.clear(); }; im.src = name; return null; }
+const BGS = ["bg/nebula.jpg", "bg/mist.jpg", "bg/clouds.jpg"];
+function cineBg(t) { const im = txi(BGS[S.novas % BGS.length]); if (!im) return false; const W = tv.width, H = tv.height, k = Math.max(W / im.width, H / im.height) * 1.08;
+  const w = im.width * k, h = im.height * k, ox = (W - w) / 2 + Math.sin(t * 0.021) * (w - W) * 0.45, oy = (H - h) / 2 + Math.cos(t * 0.017) * (h - H) * 0.45;
+  tx.drawImage(im, ox, oy, w, h); const sh = tx.createLinearGradient(0, 0, 0, H); sh.addColorStop(0, "rgba(5,2,20,.55)"); sh.addColorStop(0.22, "rgba(5,2,20,.1)"); sh.addColorStop(0.8, "rgba(5,2,20,.05)"); sh.addColorStop(1, "rgba(5,2,20,.5)"); tx.fillStyle = sh; tx.fillRect(0, 0, W, H); return true; }
+const PTEX = { moon: ["tex/2k_moon.jpg", "tex/2k_mercury.jpg", "tex/2k_ceres_fictional.jpg", "tex/2k_eris_fictional.jpg"], plan: ["tex/2k_earth_daymap.jpg", "tex/2k_earth_daymap.jpg", "tex/2k_venus_surface.jpg", "tex/2k_mars.jpg"], giant: ["tex/2k_jupiter.jpg", "tex/2k_saturn.jpg", "tex/2k_uranus.jpg", "tex/2k_neptune.jpg"] };
+const ATMO = { plan: ["#6fb7ff", "#6fb7ff", "#ffcf8a", "#ff9a6a"], giant: ["#e8c49a", "#f2dcae", "#a8e6ee", "#5b7cff"] };
+function texSphere(g, cx, cy, R, im, i, atmo) { g.save(); g.beginPath(); g.arc(cx, cy, R, 0, 6.283); g.clip();
+  const sw = im.height * 2 * (R * 2) / im.height, off = (hash(i, 77) * sw) % sw; g.drawImage(im, cx - R - off, cy - R, sw, R * 2); g.drawImage(im, cx - R - off + sw, cy - R, sw, R * 2);
+  const sh = g.createRadialGradient(cx - R * 0.45, cy - R * 0.45, R * 0.1, cx, cy, R * 1.08); sh.addColorStop(0, "rgba(255,255,255,.18)"); sh.addColorStop(0.5, "rgba(0,0,0,0)"); sh.addColorStop(0.82, "rgba(0,0,10,.55)"); sh.addColorStop(1, "rgba(0,0,10,.9)"); g.fillStyle = sh; g.fillRect(cx - R, cy - R, R * 2, R * 2); g.restore();
+  if (atmo) { const a = g.createRadialGradient(cx, cy, R * 0.92, cx, cy, R * 1.18); a.addColorStop(0, atmo + "00"); a.addColorStop(0.45, atmo + "88"); a.addColorStop(1, atmo + "00"); g.fillStyle = a; g.beginPath(); g.arc(cx, cy, R * 1.18, 0, 6.283); g.fill(); } }
 const sprCache = new Map();
 function sprite(id, i, R) { const key = id + i + ":" + R + ":" + (S.novas % 5) + (SM ? "s" + PXS * tDpr : ""); let c = sprCache.get(key); if (c) return c; if (sprCache.size > 300) sprCache.clear();
   const SC = SM ? PXS * tDpr : 1, pad = id === "giant" || id === "hole" || id === "ring" ? R * 2 + 3 : 2, n = (R + pad) * 2 + 1; c = document.createElement("canvas"); c.width = c.height = Math.ceil(n * SC); c.sc = SC; const g = c.getContext("2d"), m = R + pad; g.scale(SC, SC);
   const ell = (rx, ry, colA, colB, back) => { if (SM) { g.lineWidth = Math.max(0.8, rx / 9); g.strokeStyle = colA; g.beginPath(); g.ellipse(m, m, rx, ry, 0, back ? Math.PI : 0, back ? 2 * Math.PI : Math.PI); g.stroke(); return; } for (let a = 0; a < 6.283; a += 0.6 / Math.max(rx, 4)) { const yy = Math.sin(a) * ry; if (back ? yy > 0 : yy < 0) continue; g.fillStyle = (Math.round(a * 9) & 1) ? colA : colB; g.fillRect(m + Math.round(Math.cos(a) * rx), m + Math.round(yy), 1, 1); } };
+  const tp = SM && PTEX[id] && txi(PTEX[id][i % 4]);
+  if (tp && id !== "giant") { texSphere(g, m, m, R, tp, i, ATMO[id] && ATMO[id][i % 4]); sprCache.set(key, c); return c; }
+  if (tp && id === "giant") { const ringed = i % 4 === 1 || i % 4 === 2 || i % 3 === 0, rc = i % 4 === 1 ? "#e9d6aa" : "#bfe6ee";
+    if (ringed) { g.lineWidth = Math.max(1, R * 0.28); g.strokeStyle = rc + "88"; g.beginPath(); g.ellipse(m, m, R * 1.85, R * 0.5, -0.25, Math.PI, 2 * Math.PI); g.stroke(); }
+    texSphere(g, m, m, R, tp, i, ATMO.giant[i % 4]);
+    if (ringed) { g.strokeStyle = rc + "aa"; g.beginPath(); g.ellipse(m, m, R * 1.85, R * 0.5, -0.25, 0, Math.PI); g.stroke(); } sprCache.set(key, c); return c; }
   if (id === "moon") disc(g, m, m, R, [["#fbf3ff", "#d6c4ff", "#9a7ce8", "#4b2f8f"], ["#fff6e6", "#ffcfa0", "#d68a5a", "#7a3d2a"], ["#eafff8", "#a8f0e0", "#5fb8b0", "#245a63"], ["#fff0ff", "#ffb8f0", "#d66ad0", "#6a2a8a"]][i % 4], { spots: 0.12, seed: i * 13 });
   else if (id === "plan") disc(g, m, m, R, i % 4 === 3 ? ["#fff0e0", "#ff9a5a", "#e8502e", "#7a1f3a"] : ["#eaffff", "#00f0ff", "#0098ff", "#2a3db8"], i % 4 === 3 ? { spots: 0.1, seed: i } : { land: ["#2bd44a", "#7dff3a"], seed: i });
   else if (id === "giant") { const P = [["#fff1d6", "#ffbe5c", "#ff8a00", "#b8325a"], ["#fff6d0", "#ffe08a", "#e0a84a", "#8a5a2a"], ["#e8ffff", "#8af6ff", "#3aa8d8", "#2a4a9a"], ["#e6e0ff", "#9a8aff", "#5b4cff", "#2a1a8a"]][i % 4];
@@ -412,6 +432,8 @@ function sunS(g, cx, cy, R, t, P) {
   const co = g.createRadialGradient(cx, cy, R * 0.98, cx, cy, R * 1.22); co.addColorStop(0, P[1] + "aa"); co.addColorStop(1, P[1] + "00"); g.fillStyle = co; g.beginPath(); g.arc(cx, cy, R * 1.22, 0, 6.283); g.fill();
   const b = g.createRadialGradient(cx - R * 0.3, cy - R * 0.32, R * 0.08, cx, cy, R); b.addColorStop(0, "#ffffff"); b.addColorStop(0.18, P[0]); b.addColorStop(0.62, P[1]); b.addColorStop(0.92, P[2]); b.addColorStop(1, P[3]);
   g.fillStyle = b; g.beginPath(); g.arc(cx, cy, R, 0, 6.283); g.fill();
+  const st = txi("tex/2k_sun.jpg"); if (st) { g.save(); g.beginPath(); g.arc(cx, cy, R, 0, 6.283); g.clip(); g.globalAlpha = 0.5; g.globalCompositeOperation = "multiply"; const sw = R * 4, off = (t * R * 0.02) % sw; g.drawImage(st, cx - R - off, cy - R, sw, R * 2); g.drawImage(st, cx - R - off + sw, cy - R, sw, R * 2); g.globalCompositeOperation = "source-over"; g.globalAlpha = 1;
+    const hi = g.createRadialGradient(cx - R * 0.3, cy - R * 0.32, 0, cx, cy, R); hi.addColorStop(0, "rgba(255,255,255,.55)"); hi.addColorStop(0.5, "rgba(255,255,255,0)"); g.fillStyle = hi; g.fillRect(cx - R, cy - R, R * 2, R * 2); g.restore(); }
   if (frenzyUntil > now()) { g.strokeStyle = `rgba(255,46,110,${0.45 + 0.35 * Math.sin(t * 8)})`; g.lineWidth = Math.max(0.6, R * 0.04); g.beginPath(); g.arc(cx, cy, R * 1.1, 0, 6.283); g.stroke(); } }
 function tStar() { const L = stageOf() >= 3 ? lifeSize() : 1, R = tapMode ? Math.max(12, Math.min(LW * 0.21, LH * 0.15) * L * (1 + tPulse * 0.17)) | 0 : Math.max(6, Math.round(2.9 * viewK() * L * (1 + tPulse * 0.15))); return { x: (LW / 2 + (tapMode ? 0 : vPanX + 8)) | 0, y: (LH * (tapMode ? 0.44 : 0.46) + (tapMode ? 0 : vPanY)) | 0, R }; }
 function sysFar() { let far = 12; for (const g of GENS) if (S.own[g.id]) far = Math.max(far, ORB[g.id][1] + 1.5); return far; }
@@ -436,7 +458,7 @@ tv.addEventListener("wheel", (e) => { e.preventDefault(); if (!tapMode) vZoom = 
 tv.addEventListener("dblclick", () => { vZoom = 1; vPanX = vPanY = 0; });
 function drawTap(dt, t) {
   if (tv.clientWidth !== Math.round(tW) || tv.clientHeight !== Math.round(tH)) tSize(); if (!LW) return;
-  let g; if (SM) { tx.setTransform(1, 0, 0, 1, 0, 0); tx.imageSmoothingEnabled = true; tx.drawImage(bgc, 0, 0); tx.setTransform(PXS * tDpr, 0, 0, PXS * tDpr, 0, 0); g = tx; } else { g = px; g.imageSmoothingEnabled = false; g.drawImage(bgc, 0, 0); }
+  let g; if (SM) { tx.setTransform(1, 0, 0, 1, 0, 0); tx.imageSmoothingEnabled = true; tx.imageSmoothingQuality = "high"; if (!cineBg(t)) tx.drawImage(bgc, 0, 0); tx.setTransform(PXS * tDpr, 0, 0, PXS * tDpr, 0, 0); g = tx; } else { g = px; g.imageSmoothingEnabled = false; g.drawImage(bgc, 0, 0); }
   for (const d of tDots) { if (Math.sin(t * d.s + d.p) < -0.35) continue; g.fillStyle = d.c; const yy = (d.y + ((t * d.s * 1.5) | 0)) % LH; fr(g, d.x, yy, 1, 1); if (d.big && Math.sin(t * d.s + d.p) > 0.6) { fr(g, d.x - 1, yy, 3, 1); fr(g, d.x, yy - 1, 1, 3); } }
   tPulse *= Math.pow(0.02, dt); tRot += dt * 0.12; const st = tStar();
   if (tapMode) lifeAt(g, st.x, st.y, st.R, t);
