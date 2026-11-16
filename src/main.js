@@ -637,7 +637,7 @@ function frame() {
   if (saveAcc > 10) { saveAcc = 0; save(); }
   requestAnimationFrame(frame);
 }
-function offline() { const away = Math.min(now() - S.t, 8 * 3600e3); if (away > 60e3) { const g = GENS.reduce((a, x) => a + genRate(x), 0) * baseMult() * away / 1000 * 0.5; if (g > 0) { S.dust += g; S.total += g; S.allTime += g; toast(`While you were away (${dur(away)}): +${fmt(g)} stardust`); } } S.t = now(); }
+function offline() { const away = Math.min(now() - S.t, 8 * 3600e3); if (away > 60e3) { const g = perSec() * away / 1000 * 0.1;   /* KING_OFFLINE10: away earns 10% of your live rate (King, Nov 15) */ if (g > 0) { S.dust += g; S.total += g; S.allTime += g; toast(`While you were away (${dur(away)}): +${fmt(g)} stardust`); } } S.t = now(); }
 document.addEventListener("visibilitychange", () => { if (document.hidden) save(); else offline(); });
 window.addEventListener("pagehide", save);
 $("snd").innerHTML = S.sound ? SPK_ON : SPK_OFF;
