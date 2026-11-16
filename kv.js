@@ -21,7 +21,8 @@
   function idx(id) { for (var i = 0; i < G.length; i++) if (G[i].id === id) return i; return -1; }
   function pct(id) { return Math.max(0, Math.min(1, +(S.pct[id] || 0))); }
   function setPct(id, p) { p = Math.max(0, Math.min(1, p || 0)); if (p > pct(id) + 0.0005 || p === 1) { var was = unlockedList(); S.pct[id] = Math.max(pct(id), p); save(S); var now = unlockedList(); if (now.length > was.length) toast("🔓 " + G[now.length - 1].e + " " + G[now.length - 1].n + " unlocked! Open 🎮 Games to play it."); } }
-  function unlocked(id) { var i = idx(id); return i <= 0 || pct(G[i - 1].id) >= UNLOCK; }
+  var DEV = /[?&]dev=1/.test(location.search) || (function () { try { return localStorage.getItem("kingverse.dev") === "1"; } catch (e) { return false; } })();   /* debug: every game unlocked */
+  function unlocked(id) { var i = idx(id); return DEV || i <= 0 || pct(G[i - 1].id) >= UNLOCK; }
   function unlockedList() { return G.filter(function (g) { return unlocked(g.id); }); }
   function hasRelic(rid) { return !!S.relic[rid]; }
   function relicOf(id) { return G[idx(id)].r; }
