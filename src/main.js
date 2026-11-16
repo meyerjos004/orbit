@@ -398,7 +398,7 @@ function stageOf() { const t = S.total || 0; let i = 0; while (i < STAGES.length
 function stageK(i) { const a = STAGES[i].at, b = i < STAGES.length - 1 ? STAGES[i + 1].at : a * 2, t = S.total || 0; return a <= 0 ? Math.min(1, t / b) : Math.max(0, Math.min(1, Math.log(Math.max(t, a) / a) / Math.log(b / a))); }
 const LIFE0 = 40; function lifeF() { return stageOf() >= 3 ? 1 : (S.total || 0) < LIFE0 ? 0 : stageK(1) * 0.5 + (stageOf() >= 2 ? 0.5 : 0); }
 let lifeStage = -1;
-const stLbl = document.createElement("span"); stLbl.className = "pill"; stLbl.id = "stagelbl"; try { document.querySelector(".rates").appendChild(stLbl); } catch (e) {}
+const stLbl = document.createElement("span"); stLbl.className = "pill"; stLbl.id = "stagelbl"; try { $("stage").appendChild(stLbl); } catch (e) {}
 function lifeSize() { const i = stageOf(), A = STAGES[i], B = STAGES[Math.min(i + 1, STAGES.length - 1)]; return A.f + (B.f - A.f) * stageK(i) * (i >= 3 && i < 8 ? 0.6 : 0); }
 function dustCloud(g, cx, cy, R, t, f) { const P = pal(), n = Math.round(R * 9), spin = t * (0.35 + f * 0.9), tight = 1.25 - f * 0.55 - tPulse * 0.08, cols = ["#b9a2ff", "#8a6ad8", "#ff8ad8", "#6f8cff", "#d6c4ff", P[2]];
   for (let i = 0; i < n; i++) { const u = hash(i, 17), rr = R * tight * (0.12 + Math.pow(u, 0.7) * 1.1), a = i * 2.399 + spin * (1.6 - u) + Math.sin(t * 0.7 + i) * 0.05;
