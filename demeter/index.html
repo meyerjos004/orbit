@@ -42,7 +42,8 @@ var B = KV.boost();
 function grow(i) { return P[i][2] / (1 + S.lv.bees * 0.1) / B.speed; }
 function cost(id) { var u = UP[id]; return Math.ceil(u.base * Math.pow(u.k, S.lv[id]) * B.cost); }
 function seedCost(i) { return Math.ceil(P[i][3] * B.cost); }
-function sell(i) { return P[i][4] * B.earn; }
+function PM() { return Math.pow(1.5, S.pr || 0); }   /* KING_PRESTIGE: x1.5 per Replant */
+function sell(i) { return P[i][4] * B.earn * PM(); }
 function pct() { return Math.min(1, (S.found - 1 + (S.tree ? 1 : 0)) / P.length); }
 /* away: plants kept growing in real time; Seed of Gaia makes the time away count 50% more */
 (function () { var ms = Date.now() - (S.t || Date.now()); if (ms > 60e3 && B.off > 1) { var extra = ms * (B.off - 1); S.plots.forEach(function (p) { if (p) p.t0 -= extra; }); } })();
@@ -94,6 +95,7 @@ function tick(t) {
     document.getElementById("hintT").textContent = "Tap an empty plot to plant · tap a growing plant to water it · tap a glowing one to harvest";
     var h = '<div class="sh">UPGRADES</div>';
     Object.keys(UP).forEach(function (id) { var u = UP[id], c = cost(id); h += KG.upRow({ id: id, e: u.e, n: u.n, d: u.d, cost: KG.fmt(c), lv: u.max > 1 ? "Lv " + S.lv[id] : "", ok: S.co >= c, max: S.lv[id] >= u.max }); });
+    if (S.tree) h += '<div class="sh">REPLANT · PRESTIGE</div>' + KG.upRow({ id: "prestige", e: "🔁", n: "Replant" + (S.pr ? " (#" + (S.pr + 1) + ")" : ""), d: "Start a fresh garden from one seed. Every harvest sells for x" + (PM() * 1.5).toFixed(2).replace(/\.?0+$/, "") + " forever. Keeps your relic.", cost: "free", lv: "", ok: true, cls: "relic" });
     var R = KV.relicOf("demeter"); h += '<div class="sh">RELIC · BOOSTS ALL 5 GAMES</div>';
     h += S.relic ? KG.upRow({ id: "relic", e: R.e, n: R.n, d: R.d, cls: "relic", max: true }) : S.found >= RELIC.at ? KG.upRow({ id: "relic", e: R.e, n: R.n, d: R.d, cost: KG.fmt(RELIC.cost * B.cost), cls: "relic", ok: S.co >= RELIC.cost * B.cost }) : KG.upRow({ id: "relic", e: "❔", n: "An old seed sleeps under the soil…", d: "Discover " + RELIC.at + " plants to find it", cost: "", cls: "relic", ok: false });
     if (h !== lastShop) { document.getElementById("shop").innerHTML = h; lastShop = h; drawSeeds(); }
@@ -102,6 +104,7 @@ function tick(t) {
 }
 document.getElementById("shop").addEventListener("click", function (e) {
   var b = e.target.closest("[data-u]"); if (!b) return; var id = b.dataset.u;
+  if (id === "prestige") { if (!S.tree) return; S.pr = (S.pr || 0) + 1; S.co = 10; S.plots = [null, null, null, null]; S.found = 1; S.tree = false; S.sel = 0; S.lv = { bees: 0, plots: 0, sprink: 0 }; KV.toast("🔁 Garden #" + (S.pr + 1) + " · harvests x" + PM().toFixed(2).replace(/\.?0+$/, "")); KG.tone(880, 0.3, "triangle", 0.05, 1.5); S.save(); drawSeeds(); drawPlots(); return; }
   if (id === "relic") { var c = RELIC.cost * B.cost; if (S.relic || S.found < RELIC.at || S.co < c) return KG.tone(140, 0.1); S.co -= c; S.relic = true; KV.grant("demeter"); B = KV.boost(); KG.tone(1320, 0.3, "triangle", 0.05); S.save(); return; }
   var u = UP[id], c2 = cost(id); if (S.lv[id] >= u.max || S.co < c2) return KG.tone(140, 0.1);
   S.co -= c2; S.lv[id]++; if (id === "plots") S.plots.push(null); KG.tone(660, 0.1, "triangle", 0.05); S.save(); drawPlots();

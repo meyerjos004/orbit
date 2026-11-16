@@ -23,15 +23,16 @@ var GOAL = 10000;
 var ZONES = [[0, "Sunlight zone", "#2f8fd8", "#1a5f9e", ["🐠", "🐟", "🐢"]], [200, "Twilight zone", "#1a4f86", "#0d2c55", ["🦑", "🪼", "🐟"]], [1000, "Midnight zone", "#0b2348", "#06142c", ["🐡", "🦐", "🪼"]], [4000, "Abyss", "#071433", "#030a1c", ["🐙", "🦀", "🦑"]], [6000, "Hadal trench", "#050b22", "#010412", ["🦞", "🐋", "👁️"]]];
 var UP = {
   engine: { e: "🚀", n: "Engine", d: "Dive faster", base: 15, k: 1.6, max: 25 },
-  hull: { e: "🛡️", n: "Hull", d: "+500 m max depth", base: 25, k: 1.75, max: 20 },
+  hull: { e: "🛡️", n: "Hull", d: "+500 m max depth", base: 25, k: 1.9, max: 20 }   /* KING_BALANCE: hull cost growth 1.9 (was 1.75) */,
   lights: { e: "💡", n: "Floodlights", d: "Find credits on their own", base: 10, k: 1.55, max: 40 },
   sonar: { e: "📡", n: "Sonar", d: "More credits per ping", base: 8, k: 1.5, max: 40 }
 };
 var B = KV.boost();
 function maxDepth() { return Math.min(GOAL, 300 + S.lv.hull * 500); }
-function speed() { return S.lv.engine * 0.8 * B.speed; }
-function rate() { return S.lv.lights * (1 + S.depth / 250) * B.earn; }
-function pingVal() { return (1 + S.lv.sonar * 2) * (1 + S.depth / 200) * B.tap * B.earn; }
+function PM() { return Math.pow(1.5, S.pr || 0); }   /* KING_PRESTIGE: x1.5 per Dive Again */
+function speed() { return S.lv.engine * 0.6 * B.speed * PM();   /* KING_BALANCE: 0.6 (was 0.8) */ }
+function rate() { return S.lv.lights * (1 + S.depth / 250) * B.earn * PM(); }
+function pingVal() { return (1 + S.lv.sonar * 2) * (1 + S.depth / 200) * B.tap * B.earn * PM(); }
 function cost(id) { var u = UP[id]; return Math.ceil(u.base * Math.pow(u.k, S.lv[id] - (id === "engine" ? 1 : 0)) * B.cost); }
 var RELIC = { at: 6000, cost: 250000 };
 function zone(d) { var z = ZONES[0]; ZONES.forEach(function (x) { if (d >= x[0]) z = x; }); return z; }
@@ -83,12 +84,14 @@ function ui() {
   document.getElementById("zone").textContent = zone(S.depth)[1];
   var h = '<div class="sh">UPGRADES</div>';
   Object.keys(UP).forEach(function (id) { var u = UP[id], lv = S.lv[id], mx = lv >= u.max || (id === "hull" && maxDepth() >= GOAL), c = cost(id); h += KG.upRow({ id: id, e: u.e, n: u.n, d: u.d, cost: KG.fmt(c), lv: "Lv " + lv, ok: S.cr >= c, max: mx }); });
+  if (S.depth >= GOAL) h += '<div class="sh">DIVE AGAIN · PRESTIGE</div>' + KG.upRow({ id: "prestige", e: "🔁", n: "Dive again" + (S.pr ? " (#" + (S.pr + 1) + ")" : ""), d: "Start over at the surface. Everything in TETHYS is ×1.5 faster forever (now ×" + PM().toFixed(2).replace(/\.?0+$/, "") + ")", cost: "free", lv: "", ok: true, cls: "relic" });   /* KING_PRESTIGE */
   var R = KV.relicOf("tethys"); h += '<div class="sh">RELIC · BOOSTS ALL 5 GAMES</div>';
   h += S.relic ? KG.upRow({ id: "relic", e: R.e, n: R.n, d: R.d, cls: "relic", max: true }) : S.best >= RELIC.at ? KG.upRow({ id: "relic", e: R.e, n: R.n, d: R.d, cost: KG.fmt(RELIC.cost * B.cost), cls: "relic", ok: S.cr >= RELIC.cost * B.cost }) : KG.upRow({ id: "relic", e: "❔", n: "Something glows in the trench…", d: "Reach " + RELIC.at.toLocaleString() + " m to find it", cost: "", cls: "relic", ok: false });
   if (h !== lastShop) { document.getElementById("shop").innerHTML = h; lastShop = h; }
 }
 document.getElementById("shop").addEventListener("click", function (e) {
   var b = e.target.closest("[data-u]"); if (!b) return; var id = b.dataset.u;
+  if (id === "prestige") { if (S.depth < GOAL) return; S.pr = (S.pr || 0) + 1; S.cr = 0; S.depth = 0; S.lv = { engine: 1, hull: 0, lights: 0, sonar: 0 }; KV.toast("🔁 Dive #" + (S.pr + 1) + " · TETHYS ×" + PM().toFixed(2).replace(/\.?0+$/, "")); KG.tone(990, 0.3, "triangle", 0.05); S.save(); return; }   /* KING_PRESTIGE */
   if (id === "relic") { var c = RELIC.cost * B.cost; if (S.relic || S.best < RELIC.at || S.cr < c) return KG.tone(140, 0.1); S.cr -= c; S.relic = true; KV.grant("tethys"); B = KV.boost(); KG.tone(1320, 0.3, "triangle", 0.05); S.save(); return; }
   var u = UP[id], c2 = cost(id); if (S.lv[id] >= u.max || S.cr < c2) return KG.tone(140, 0.1);
   S.cr -= c2; S.lv[id]++; KG.tone(660, 0.1, "triangle", 0.05); S.save();

@@ -35,7 +35,8 @@ var UP = {
 var RELIC = { at: 6, cost: 4000 };
 var B = KV.boost();
 function cost(id) { var u = UP[id]; return Math.ceil(u.base * Math.pow(u.k, S.lv[id]) * B.cost); }
-function rate() { return S.cleared * (0.4 + S.lv.gen * 0.35) * B.earn * B.speed; }
+function PM() { return Math.pow(1.5, S.pr || 0); }   /* KING_PRESTIGE: x1.5 per Ride Again */
+function rate() { return S.cleared * (0.4 + S.lv.gen * 0.35) * B.earn * B.speed * PM(); }
 function target(s) { return Math.min(0.66, 0.36 + s * 0.03); }
 KG.away(S, rate(), function (v) { S.en += v; });
 
@@ -131,12 +132,14 @@ function ui() {
   document.getElementById("gnext").textContent = S.cleared >= 10 ? "All 10 sectors are yours. NYX complete!" : live ? "Leave your zone, draw a loop, get back in to claim it. Don't let a rider touch your trail." : "Next: clear sector " + S.sector + " (claim " + Math.round(target(S.sector) * 100) + "% of the grid)";
   var h = '<div class="sh">UPGRADES</div>';
   Object.keys(UP).forEach(function (id) { var u = UP[id], c = cost(id); h += KG.upRow({ id: id, e: u.e, n: u.n, d: u.d, cost: KG.fmt(c), lv: "Lv " + S.lv[id], ok: S.en >= c, max: S.lv[id] >= u.max }); });
+  if (S.cleared >= 10) h += '<div class="sh">RIDE AGAIN · PRESTIGE</div>' + KG.upRow({ id: "prestige", e: "🔁", n: "Ride again" + (S.pr ? " (#" + (S.pr + 1) + ")" : ""), d: "Back to sector 1 with a faster core. Energy income x" + (PM() * 1.5).toFixed(2).replace(/\.?0+$/, "") + " forever. Keeps your relic.", cost: "free", lv: "", ok: true, cls: "relic" });
   var R = KV.relicOf("nyx"); h += '<div class="sh">RELIC · BOOSTS ALL 5 GAMES</div>';
   h += S.relic ? KG.upRow({ id: "relic", e: R.e, n: R.n, d: R.d, cls: "relic", max: true }) : S.cleared >= RELIC.at ? KG.upRow({ id: "relic", e: R.e, n: R.n, d: R.d, cost: KG.fmt(RELIC.cost * B.cost), cls: "relic", ok: S.en >= RELIC.cost * B.cost }) : KG.upRow({ id: "relic", e: "❔", n: "A bright core pulses past sector 5…", d: "Clear sector " + RELIC.at + " to find it", cost: "", cls: "relic", ok: false });
   if (h !== lastShop) { document.getElementById("shop").innerHTML = h; lastShop = h; }
 }
 document.getElementById("shop").addEventListener("click", function (e) {
   var b = e.target.closest("[data-u]"); if (!b) return; var id = b.dataset.u;
+  if (id === "prestige") { if (S.cleared < 10) return; S.pr = (S.pr || 0) + 1; S.en = 0; S.sector = 1; S.cleared = 0; S.lv = { shield: 0, zone: 0, gen: 0, jam: 0 }; KV.toast("🔁 Ride #" + (S.pr + 1) + " · income x" + PM().toFixed(2).replace(/\.?0+$/, "")); KG.tone(880, 0.3, "triangle", 0.05, 1.5); S.save(); start(); return; }
   if (id === "relic") { var c = RELIC.cost * B.cost; if (S.relic || S.cleared < RELIC.at || S.en < c) return KG.tone(140, 0.1); S.en -= c; S.relic = true; KV.grant("nyx"); B = KV.boost(); KG.tone(1320, 0.3, "triangle", 0.05); S.save(); return; }
   var u = UP[id], c2 = cost(id); if (S.lv[id] >= u.max || S.en < c2) return KG.tone(140, 0.1);
   S.en -= c2; S.lv[id]++; KG.tone(660, 0.1, "triangle", 0.05); S.save();
