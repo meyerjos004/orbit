@@ -1,0 +1,98 @@
+<!doctype html>
+<html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<title>TALOS</title><meta name="theme-color" content="#1a0f06">
+<link rel="preconnect" href="https://fonts.googleapis.com"><link href="https://fonts.googleapis.com/css2?family=Pixelify+Sans:wght@400;600;700&display=swap" rel="stylesheet">
+<script src="../kv.js"></script><script src="../kvgame.js"></script>
+<style>#stage{display:flex;flex-direction:column;align-items:center;justify-content:center;gap:10px;padding:10px;background:radial-gradient(circle at 50% 40%,#3a2210,#140a04 75%)}
+#stage{container-type:size}#board{display:grid;gap:6px;width:min(94cqw,440px,calc(100cqh - 110px));aspect-ratio:1}
+#board button{all:unset;position:relative;display:grid;place-items:center;background:#24150a;border:2px solid #4a2f14;box-shadow:inset 0 -3px 0 rgba(0,0,0,.35);cursor:pointer;font-size:clamp(18px,7vw,34px);transition:transform .12s}
+#board button.p{background:#3b2410;border-color:#8a5a26}#board button.sel{border-color:#ffe14d;box-shadow:0 0 0 2px #ffe14d,inset 0 -3px 0 rgba(0,0,0,.35);transform:scale(.95)}
+#board button.match{border-color:#4dff9a}#board button i{position:absolute;right:3px;bottom:1px;font-style:normal;font-size:11px;color:#ffd9a0}
+#board button.new{animation:pn .25s}@keyframes pn{from{transform:scale(.4)}}
+#board button:focus-visible{outline:2px solid #ffe14d}
+#forge{all:unset;cursor:pointer;padding:12px 22px;background:#ff9a3d;color:#1a0f06;font-weight:700;font-size:16px;box-shadow:3px 3px 0 #000}#forge:active{transform:translate(2px,2px);box-shadow:1px 1px 0 #000}
+#forge[disabled]{opacity:.5}#hintT{font-size:13px;color:#e8d3b8;text-align:center;min-height:18px}
+@media(prefers-reduced-motion:reduce){#board button.new{animation:none}}</style>
+</head><body>
+<div id="app">
+  <div id="top"><div class="row1"><div><div class="ttl">TALOS · BRONZE</div><div class="big" id="cur">0</div><div class="rate" id="rate"></div></div><div class="btns"><button class="ib" id="snd"></button><span id="kvb"></span></div></div>
+    <div id="goal"><div class="gl"><span id="gtxt"></span><b id="gpct"></b></div><div class="bar"><i id="gbar"></i></div><div class="nx" id="gnext"></div></div></div>
+  <div id="stage"><div id="board" role="grid" aria-label="Workshop"></div><div id="hintT">Tap two matching parts to merge them</div><button id="forge">🔨 Forge a part</button></div>
+  <div id="shop"></div>
+</div>
+<script>
+/* TALOS — merge bronze parts up to the giant automaton TALOS (tier 10). KINGVERSE game 3. */
+KG.boot({ bg: "#1a0f06", acc: "#ffb347", acc2: "#c0621a", glow: "rgba(255,179,71,.5)", line: "#4a2f14" });
+var OK = KV.mount("talos", document.getElementById("kvb"));
+KG.muteBtn(document.getElementById("snd"));
+var T = [null, ["⚙️", "Gear"], ["🔩", "Bolt"], ["🌀", "Spring"], ["🔧", "Piston"], ["🛡️", "Plate"], ["🦾", "Arm"], ["🦿", "Leg"], ["🧠", "Core"], ["🤖", "Automaton"], ["🗿", "TALOS"]];
+var S = KG.store("kv.talos", { br: 0, size: 4, cells: [], maxT: 1, lv: { auto: 0, tier: 0, size: 0 }, relic: false, t: Date.now() });
+function N() { return S.size * S.size; }
+while (S.cells.length < N()) S.cells.push(0);
+var UP = {
+  auto: { e: "⏱️", n: "Auto-forge", d: "Forges a part for you every few seconds", base: 20, k: 2.2, max: 10 },
+  tier: { e: "🔥", n: "Hotter furnace", d: "New parts start one tier higher", base: 300, k: 9, max: 4 },
+  size: { e: "📐", n: "Bigger workshop", d: "One more row and column", base: 800, k: 25, max: 2 }
+};
+var RELIC = { at: 6, cost: 60000 };
+var B = KV.boost();
+function partRate(t) { return Math.pow(2.2, t - 1) * 0.5; }
+function rate() { var r = 0; S.cells.forEach(function (t) { if (t) r += partRate(t); }); return r * B.earn * B.speed; }
+function cost(id) { var u = UP[id]; return Math.ceil(u.base * Math.pow(u.k, S.lv[id]) * B.cost); }
+function autoEvery() { return S.lv.auto ? Math.max(1, 10 - S.lv.auto * 0.9) / B.speed : 0; }
+KG.away(S, rate(), function (v) { S.br += v; });
+
+var board = document.getElementById("board"), sel = -1, fresh = -1;
+function spawn(n) {
+  var made = 0;
+  for (var k = 0; k < n; k++) { var empty = []; S.cells.forEach(function (t, i) { if (!t) empty.push(i); }); if (!empty.length) break; var i = empty[Math.floor(Math.random() * empty.length)]; S.cells[i] = 1 + S.lv.tier; fresh = i; made++; }
+  if (made) { KG.tone(330, 0.08, "square", 0.03, 1.2); draw(); } return made;
+}
+function merge(a, b) {
+  var t = S.cells[a] + 1; S.cells[a] = 0; S.cells[b] = t; fresh = b; if (t > S.maxT) { S.maxT = t; KV.toast(T[t][0] + " New part: " + T[t][1] + "!"); }
+  KV.setPct("talos", (S.maxT - 1) / 9); KG.tone(440 + t * 70, 0.15, "triangle", 0.05, 1.4); S.save(); draw();
+}
+board.addEventListener("click", function (e) {
+  var b = e.target.closest("button"); if (!b || !OK) return; var i = +b.dataset.i, t = S.cells[i];
+  if (sel === -1) { if (t && t < 10) { sel = i; draw(); } return; }
+  if (i === sel) { sel = -1; draw(); return; }
+  if (t && t === S.cells[sel] && t < 10) { var a = sel; sel = -1; merge(a, i); return; }
+  if (!t) { S.cells[i] = S.cells[sel]; S.cells[sel] = 0; sel = -1; draw(); return; }   // move a part to an empty spot
+  sel = t < 10 ? i : -1; draw();
+});
+document.getElementById("forge").onclick = function () { if (OK && !spawn(B.tap)) KV.toast("The workshop is full: merge some parts first"); };
+function draw() {
+  board.style.gridTemplateColumns = "repeat(" + S.size + ",1fr)";
+  var h = "", st = sel >= 0 ? S.cells[sel] : 0;
+  S.cells.forEach(function (t, i) { h += '<button class="' + (t ? "p" : "") + (i === sel ? " sel" : st && t === st && i !== sel ? " match" : "") + (i === fresh ? " new" : "") + '" data-i="' + i + '" aria-label="' + (t ? T[t][1] + " tier " + t : "Empty") + '">' + (t ? T[t][0] + "<i>" + t + "</i>" : "") + "</button>"; });
+  board.innerHTML = h; fresh = -1;
+  document.getElementById("hintT").textContent = sel >= 0 ? "Now tap another " + T[S.cells[sel]][1] + " to merge (or an empty spot to move it)" : S.cells.every(function (t) { return t; }) ? "Full! Merge matching parts to make room" : "Tap two matching parts to merge them";
+}
+var lastShop = "", autoT = 0, last = performance.now();
+function tick(t) {
+  var dt = Math.min(0.5, (t - last) / 1000); last = t;
+  if (OK) { S.br += rate() * dt; var ae = autoEvery(); if (ae) { autoT += dt; if (autoT >= ae) { autoT = 0; spawn(1); } } }
+  document.getElementById("cur").textContent = KG.fmt(S.br);
+  document.getElementById("rate").textContent = KG.fmt(rate()) + "/s" + (autoEvery() ? " · auto-forge every " + autoEvery().toFixed(1) + " s" : "");
+  var p = (S.maxT - 1) / 9;
+  document.getElementById("gtxt").textContent = "Best part: " + T[S.maxT][0] + " " + T[S.maxT][1] + " (tier " + S.maxT + "/10)";
+  document.getElementById("gpct").textContent = Math.floor(p * 100) + "%"; document.getElementById("gbar").style.width = p * 100 + "%";
+  document.getElementById("gnext").textContent = S.maxT >= 10 ? "TALOS stands. You built the giant. TALOS complete!" : "Next: merge two " + T[S.maxT][1] + "s into a " + T[S.maxT + 1][0] + " " + T[S.maxT + 1][1];
+  var h = '<div class="sh">UPGRADES</div>';
+  Object.keys(UP).forEach(function (id) { var u = UP[id], c = cost(id); h += KG.upRow({ id: id, e: u.e, n: u.n, d: u.d, cost: KG.fmt(c), lv: "Lv " + S.lv[id], ok: S.br >= c, max: S.lv[id] >= u.max }); });
+  var R = KV.relicOf("talos"); h += '<div class="sh">RELIC · BOOSTS ALL 5 GAMES</div>';
+  h += S.relic ? KG.upRow({ id: "relic", e: R.e, n: R.n, d: R.d, cls: "relic", max: true }) : S.maxT >= RELIC.at ? KG.upRow({ id: "relic", e: R.e, n: R.n, d: R.d, cost: KG.fmt(RELIC.cost * B.cost), cls: "relic", ok: S.br >= RELIC.cost * B.cost }) : KG.upRow({ id: "relic", e: "❔", n: "A strange spring hums in the furnace…", d: "Build an " + T[RELIC.at][1] + " (tier " + RELIC.at + ") to find it", cost: "", cls: "relic", ok: false });
+  if (h !== lastShop) { document.getElementById("shop").innerHTML = h; lastShop = h; }
+  requestAnimationFrame(tick);
+}
+document.getElementById("shop").addEventListener("click", function (e) {
+  var b = e.target.closest("[data-u]"); if (!b) return; var id = b.dataset.u;
+  if (id === "relic") { var c = RELIC.cost * B.cost; if (S.relic || S.maxT < RELIC.at || S.br < c) return KG.tone(140, 0.1); S.br -= c; S.relic = true; KV.grant("talos"); B = KV.boost(); KG.tone(1320, 0.3, "triangle", 0.05); S.save(); return; }
+  var u = UP[id], c2 = cost(id); if (S.lv[id] >= u.max || S.br < c2) return KG.tone(140, 0.1);
+  S.br -= c2; S.lv[id]++;
+  if (id === "size") { var old = S.cells.slice(), os = S.size; S.size++; S.cells = []; for (var r = 0; r < S.size; r++) for (var c3 = 0; c3 < S.size; c3++) S.cells.push(r < os && c3 < os ? old[r * os + c3] : 0); sel = -1; draw(); }
+  KG.tone(660, 0.1, "triangle", 0.05); S.save();
+});
+if (!S.cells.some(function (t) { return t; })) { S.cells[0] = 1; S.cells[1] = 1; }
+draw(); setInterval(S.save, 10000); requestAnimationFrame(tick);
+</script></body></html>

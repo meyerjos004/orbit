@@ -1,0 +1,110 @@
+<!doctype html>
+<html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<title>DEMETER</title><meta name="theme-color" content="#0c1a0a">
+<link rel="preconnect" href="https://fonts.googleapis.com"><link href="https://fonts.googleapis.com/css2?family=Pixelify+Sans:wght@400;600;700&display=swap" rel="stylesheet">
+<script src="../kv.js"></script><script src="../kvgame.js"></script>
+<style>#stage{display:flex;flex-direction:column;align-items:center;justify-content:center;gap:10px;padding:10px;background:linear-gradient(180deg,#183a1a,#0c1a0a)}
+#stage{container-type:size}#plots{display:grid;gap:6px;width:min(94%,440px)}
+#plots button{all:unset;position:relative;aspect-ratio:1;display:grid;place-items:center;background:#3a2414;border:2px solid #5a3a1e;box-shadow:inset 0 -4px 0 rgba(0,0,0,.35);cursor:pointer;font-size:clamp(20px,8vw,38px)}
+#plots button.ready{border-color:#ffe14d;animation:rd 1s ease-in-out infinite alternate}@keyframes rd{to{box-shadow:0 0 14px rgba(255,225,77,.6),inset 0 -4px 0 rgba(0,0,0,.35)}}
+#plots button .g{position:absolute;left:4px;right:4px;bottom:4px;height:5px;background:rgba(0,0,0,.5)}#plots button .g i{display:block;height:100%;background:#4dff9a}
+#plots button small{position:absolute;top:2px;left:4px;font-size:10px;color:#e8f5d8}
+#plots button:focus-visible{outline:2px solid #ffe14d}
+#seeds{display:flex;gap:6px;overflow-x:auto;width:min(100%,560px);padding:2px 2px 6px;scrollbar-width:none}#seeds::-webkit-scrollbar{display:none}
+#seeds button{all:unset;flex:0 0 auto;cursor:pointer;padding:6px 10px;background:#122a10;border:2px solid #2f5a26;font-size:13px;white-space:nowrap}#seeds button.on{border-color:#ffe14d;background:#24461c}#seeds button.lock{opacity:.4;cursor:default}
+#hintT{font-size:13px;color:#d8ecc8;text-align:center;min-height:18px}
+@media(prefers-reduced-motion:reduce){#plots button.ready{animation:none}}</style>
+</head><body>
+<div id="app">
+  <div id="top"><div class="row1"><div><div class="ttl">DEMETER · COINS</div><div class="big" id="cur">0</div><div class="rate" id="rate"></div></div><div class="btns"><button class="ib" id="snd"></button><span id="kvb"></span></div></div>
+    <div id="goal"><div class="gl"><span id="gtxt"></span><b id="gpct"></b></div><div class="bar"><i id="gbar"></i></div><div class="nx" id="gnext"></div></div></div>
+  <div id="stage"><div id="seeds" role="listbox" aria-label="Seeds"></div><div id="plots" aria-label="Garden"></div><div id="hintT"></div></div>
+  <div id="shop"></div>
+</div>
+<script>
+/* DEMETER — grow 12 plants, each one discovered by harvesting the one before, ending with the World Tree. Plants grow in real time. KINGVERSE game 5. */
+KG.boot({ bg: "#0c1a0a", acc: "#9dff6a", acc2: "#2f9e44", glow: "rgba(157,255,106,.45)", line: "#2f5a26" });
+var OK = KV.mount("demeter", document.getElementById("kvb"));
+KG.muteBtn(document.getElementById("snd"));
+/* [emoji, name, grow seconds, seed cost, sell value] */
+var P = [["🌾", "Wheat", 15, 2, 6], ["🥕", "Carrot", 40, 10, 30], ["🌷", "Tulip", 90, 40, 120], ["🌻", "Sunflower", 180, 150, 480], ["🌹", "Rose", 300, 500, 1500], ["🎃", "Pumpkin", 480, 1600, 5000], ["🍇", "Grapes", 720, 5000, 16000], ["🍒", "Cherry", 1080, 16000, 52000], ["🪷", "Lotus", 1500, 50000, 165000], ["🌵", "Cactus", 2100, 160000, 530000], ["🍄", "Mushroom", 2700, 500000, 1700000], ["🌳", "World Tree", 3600, 1600000, 6000000]];
+var NEED = 6;   /* harvest this many of a plant to discover the next */
+var S = KG.store("kv.demeter", { co: 10, plots: [], n: 4, got: [], found: 1, tree: false, sel: 0, lv: { bees: 0, plots: 0, sprink: 0 }, relic: false, t: Date.now() });
+while (S.got.length < P.length) S.got.push(0);
+while (S.plots.length < S.n) S.plots.push(null);
+var UP = {
+  bees: { e: "🐝", n: "Beehive", d: "Plants grow 10% faster", base: 30, k: 2.4, max: 8 },
+  plots: { e: "🟫", n: "New plot", d: "One more spot to plant", base: 20, k: 3.1, max: 8 },
+  sprink: { e: "💧", n: "Sprinkler", d: "Auto-harvests and replants ripe plants", base: 400, k: 1, max: 1 }
+};
+var RELIC = { at: 8, cost: 400000 };
+var B = KV.boost();
+function grow(i) { return P[i][2] / (1 + S.lv.bees * 0.1) / B.speed; }
+function cost(id) { var u = UP[id]; return Math.ceil(u.base * Math.pow(u.k, S.lv[id]) * B.cost); }
+function seedCost(i) { return Math.ceil(P[i][3] * B.cost); }
+function sell(i) { return P[i][4] * B.earn; }
+function pct() { return Math.min(1, (S.found - 1 + (S.tree ? 1 : 0)) / P.length); }
+/* away: plants kept growing in real time; Seed of Gaia makes the time away count 50% more */
+(function () { var ms = Date.now() - (S.t || Date.now()); if (ms > 60e3 && B.off > 1) { var extra = ms * (B.off - 1); S.plots.forEach(function (p) { if (p) p.t0 -= extra; }); } })();
+var plotsEl = document.getElementById("plots"), seedsEl = document.getElementById("seeds"), stage = document.getElementById("stage");
+function ripe(p) { return p && (Date.now() - p.t0) / 1000 >= grow(p.s); }
+function harvest(k, auto) {
+  var p = S.plots[k], v = sell(p.s); S.co += v; S.got[p.s]++;
+  if (p.s === P.length - 1 && !S.tree) { S.tree = true; KV.toast("🌳 The World Tree is grown. DEMETER complete!"); }
+  if (p.s === S.found - 1 && S.got[p.s] >= NEED && S.found < P.length) { S.found++; KV.toast(P[S.found - 1][0] + " New seed discovered: " + P[S.found - 1][1] + "!"); KG.tone(1046, 0.3, "triangle", 0.05, 1.4); }
+  KV.setPct("demeter", pct());
+  S.plots[k] = null;
+  if (auto && S.co >= seedCost(p.s)) { S.co -= seedCost(p.s); S.plots[k] = { s: p.s, t0: Date.now() }; }
+  return v;
+}
+plotsEl.addEventListener("click", function (e) {
+  var b = e.target.closest("button"); if (!b || !OK) return; var k = +b.dataset.k, p = S.plots[k];
+  if (!p) { var c = seedCost(S.sel); if (S.co < c) { KV.toast("Need " + KG.fmt(c) + " coins for " + P[S.sel][1]); return KG.tone(140, 0.1); } S.co -= c; S.plots[k] = { s: S.sel, t0: Date.now() }; KG.tone(392, 0.08, "triangle", 0.04); }
+  else if (ripe(p)) { var r = b.getBoundingClientRect(), sr = stage.getBoundingClientRect(), v = harvest(k); KG.pop(stage, r.left - sr.left + r.width / 2, r.top - sr.top, "+" + KG.fmt(v)); KG.tone(660, 0.12, "triangle", 0.05, 1.4); }
+  else { p.t0 -= grow(p.s) * 1000 * 0.05 * B.tap; KG.tone(523, 0.05, "sine", 0.03); }   /* watering: 5% sooner per tap (×2 with Light Core) */
+  S.save(); drawPlots();
+});
+seedsEl.addEventListener("click", function (e) { var b = e.target.closest("button"); if (!b) return; var i = +b.dataset.s; if (i >= S.found) return; S.sel = i; drawSeeds(); });
+function drawSeeds() { var h = ""; P.forEach(function (p, i) { var ok = i < S.found; h += '<button role="option" aria-selected="' + (S.sel === i) + '" class="' + (S.sel === i ? "on" : "") + (ok ? "" : " lock") + '" data-s="' + i + '">' + (ok ? p[0] + " " + p[1] + " · " + KG.fmt(seedCost(i)) : "🔒 ???") + "</button>"; }); seedsEl.innerHTML = h; }
+function drawPlots() {
+  var n = S.plots.length, cols = n <= 4 ? 2 : n <= 9 ? 3 : 4; plotsEl.style.gridTemplateColumns = "repeat(" + cols + ",1fr)"; var rows = Math.ceil(n / cols); plotsEl.style.width = "min(94cqw," + cols * 120 + "px,calc((100cqh - 120px) * " + cols + " / " + rows + "))";
+  var h = "";
+  S.plots.forEach(function (p, k) {
+    if (!p) { h += '<button data-k="' + k + '" aria-label="Empty plot: plant ' + P[S.sel][1] + '"><small>plant</small>➕</button>'; return; }
+    var f = Math.min(1, (Date.now() - p.t0) / 1000 / grow(p.s)), r = f >= 1, left = Math.max(0, grow(p.s) - (Date.now() - p.t0) / 1000);
+    h += '<button data-k="' + k + '" class="' + (r ? "ready" : "") + '" aria-label="' + P[p.s][1] + (r ? " ready to harvest" : " growing") + '"><small>' + (r ? "harvest" : KG.dur(left * 1000)) + "</small>" + (f < 0.34 ? "🌱" : f < 0.67 ? "🌿" : P[p.s][0]) + '<span class="g"><i style="width:' + f * 100 + '%"></i></span></button>';
+  });
+  plotsEl.innerHTML = h;
+}
+var lastShop = "", acc = 0, last = performance.now();
+function tick(t) {
+  var dt = Math.min(1, (t - last) / 1000); last = t; acc += dt;
+  if (acc >= 0.5) {
+    acc = 0;
+    if (OK && S.lv.sprink) S.plots.forEach(function (p, k) { if (ripe(p)) harvest(k, true); });
+    drawPlots();
+    document.getElementById("cur").textContent = KG.fmt(S.co);
+    var growing = S.plots.filter(function (p) { return p; }).length;
+    document.getElementById("rate").textContent = growing + "/" + S.plots.length + " plots growing" + (S.lv.sprink ? " · sprinkler on" : "");
+    var p = pct();
+    document.getElementById("gtxt").textContent = "Plants discovered " + S.found + "/12" + (S.tree ? " · World Tree grown" : "");
+    document.getElementById("gpct").textContent = Math.floor(p * 100) + "%"; document.getElementById("gbar").style.width = p * 100 + "%";
+    var cur = S.found - 1;
+    document.getElementById("gnext").textContent = S.tree ? "The World Tree stands. DEMETER complete!" : S.found >= P.length ? "Grow and harvest the 🌳 World Tree to finish" : "Next: harvest " + (NEED - Math.min(NEED, S.got[cur])) + " more " + P[cur][0] + " " + P[cur][1] + " to discover a new seed";
+    document.getElementById("hintT").textContent = "Tap an empty plot to plant · tap a growing plant to water it · tap a glowing one to harvest";
+    var h = '<div class="sh">UPGRADES</div>';
+    Object.keys(UP).forEach(function (id) { var u = UP[id], c = cost(id); h += KG.upRow({ id: id, e: u.e, n: u.n, d: u.d, cost: KG.fmt(c), lv: u.max > 1 ? "Lv " + S.lv[id] : "", ok: S.co >= c, max: S.lv[id] >= u.max }); });
+    var R = KV.relicOf("demeter"); h += '<div class="sh">RELIC · BOOSTS ALL 5 GAMES</div>';
+    h += S.relic ? KG.upRow({ id: "relic", e: R.e, n: R.n, d: R.d, cls: "relic", max: true }) : S.found >= RELIC.at ? KG.upRow({ id: "relic", e: R.e, n: R.n, d: R.d, cost: KG.fmt(RELIC.cost * B.cost), cls: "relic", ok: S.co >= RELIC.cost * B.cost }) : KG.upRow({ id: "relic", e: "❔", n: "An old seed sleeps under the soil…", d: "Discover " + RELIC.at + " plants to find it", cost: "", cls: "relic", ok: false });
+    if (h !== lastShop) { document.getElementById("shop").innerHTML = h; lastShop = h; drawSeeds(); }
+  }
+  requestAnimationFrame(tick);
+}
+document.getElementById("shop").addEventListener("click", function (e) {
+  var b = e.target.closest("[data-u]"); if (!b) return; var id = b.dataset.u;
+  if (id === "relic") { var c = RELIC.cost * B.cost; if (S.relic || S.found < RELIC.at || S.co < c) return KG.tone(140, 0.1); S.co -= c; S.relic = true; KV.grant("demeter"); B = KV.boost(); KG.tone(1320, 0.3, "triangle", 0.05); S.save(); return; }
+  var u = UP[id], c2 = cost(id); if (S.lv[id] >= u.max || S.co < c2) return KG.tone(140, 0.1);
+  S.co -= c2; S.lv[id]++; if (id === "plots") S.plots.push(null); KG.tone(660, 0.1, "triangle", 0.05); S.save(); drawPlots();
+});
+drawSeeds(); drawPlots(); setInterval(S.save, 10000); requestAnimationFrame(tick);
+</script></body></html>

@@ -43,18 +43,20 @@ const save = () => { S.t = now(); try { localStorage.setItem(KEY, JSON.stringify
 window.__S = () => S;
 
 let frenzyUntil = 0;
+/* KINGVERSE: relics from the other 4 games boost HELIOS (kv.js) */
+const KB0 = { cost: 1, earn: 1, speed: 1, tap: 1, off: 1 }; const KB = () => { try { return window.KV ? KV.boost() : KB0; } catch (e) { return KB0; } };
 const genMult = (g) => UPS.reduce((m, u) => (u.g === g.id && S.ups[u.id] ? m * 2 : m), 1);
 const baseMult = () => (1 + S.shards * 0.1) * Math.pow(2, lv("forge")) * (S.ups.t5 ? 1.5 : 1) * (S.ups.t6 ? 2 : 1);
 const globalMult = () => baseMult() * (frenzyUntil > now() ? 10 : 1);
 const genRate = (g) => (S.own[g.id] || 0) * g.rate * genMult(g);
-const perSec = () => GENS.reduce((a, g) => a + genRate(g), 0) * globalMult();
+const perSec = () => GENS.reduce((a, g) => a + genRate(g), 0) * globalMult() * KB().earn * KB().speed;
 // KING_TAPSTACK: every tap upgrade stacks on the WHOLE tap. Flat tap gets the Everything/shard boosts; the % of /sec part already includes them.
 const tapMult = () => (S.ups.t0 ? 2 : 1) * (S.ups.t1 ? 2 : 1) * (S.ups.t4 ? 3 : 1);
 const tapPct = () => (S.ups.t3 ? 0.01 : 0) + (S.ups.t7 ? 0.03 : 0) + 0.01 * lv("touch");
-const tapVal = () => (baseMult() + perSec() / (frenzyUntil > now() ? 10 : 1) * tapPct()) * tapMult() * (frenzyUntil > now() ? 10 : 1);   // KING_FRENZY10
+const tapVal = () => (baseMult() + perSec() / (frenzyUntil > now() ? 10 : 1) * tapPct()) * tapMult() * (frenzyUntil > now() ? 10 : 1) * KB().tap;   // KING_FRENZY10
 const R = 1.15;
-const cost = (g, k) => g.base * Math.pow(R, S.own[g.id] || 0) * (Math.pow(R, k) - 1) / (R - 1);
-const maxBuy = (g) => Math.max(0, Math.floor(Math.log(S.dust * (R - 1) / (g.base * Math.pow(R, S.own[g.id] || 0)) + 1) / Math.log(R)));
+const cost = (g, k) => KB().cost * g.base * Math.pow(R, S.own[g.id] || 0) * (Math.pow(R, k) - 1) / (R - 1);
+const maxBuy = (g) => Math.max(0, Math.floor(Math.log(S.dust * (R - 1) / (KB().cost * g.base * Math.pow(R, S.own[g.id] || 0)) + 1) / Math.log(R)));
 /* KING_SHARDSHOP: the goal grows with every shard you've ever earned (curve A); each Supernova pays more than the last */
 const SHOP = [
   { id: "comet", n: "Comet magnet", e: "☄️", d: (l) => `Comets come ${25 * l}% more often`, base: 2, gr: 1.8, max: 5, at: 0 },
@@ -71,6 +73,8 @@ const novaGoal = () => 1e9 * Math.pow(1 + (S.life || 0) / 5, 2);
 const novaMult = () => 2 * (1 + 0.5 * (S.novas || 0)) * (1 + 0.25 * lv("echo"));
 const shardsFor = (t) => Math.floor(Math.sqrt(t / novaGoal()) * novaMult());
 const nextShardAt = (t) => novaGoal() * Math.pow((shardsFor(t) + 1) / novaMult(), 2);
+const kvPct = () => Math.min(1, Math.log10(Math.max(1, S.allTime)) / 9);   /* KINGVERSE: HELIOS is 100% when you have made 1B stardust in total */
+const SUNSTONE = { at: 0.6, cost: 1e6 };
 const SUF = ["", "K", "M", "B", "T", "Qa", "Qi", "Sx", "Sp", "Oc", "No", "Dc"];
 const fmt = (n) => { if (!isFinite(n)) return "∞"; if (n < 1000) return n < 10 && n % 1 ? n.toFixed(1) : Math.floor(n).toLocaleString(); const e = Math.min(SUF.length - 1, Math.floor(Math.log10(n) / 3)); const v = n / Math.pow(1000, e); return (v < 10 ? v.toFixed(2) : v < 100 ? v.toFixed(1) : Math.floor(v)) + SUF[e]; };
 const dur = (ms) => { const s = Math.floor(ms / 1000), h = Math.floor(s / 3600), m = Math.floor((s % 3600) / 60); return h ? `${h}h ${m}m` : m ? `${m}m ${s % 60}s` : `${s}s`; };
@@ -569,6 +573,7 @@ function render() {
         <span class="rt"><span class="cost">${fmt(c)}</span><span class="own">${k > 1 ? "×" + k : "own " + own}</span></span></button>`; }
     if (!S.own.mote) h += `<p class="empty">Tap the star 15 times, then buy Stardust motes. They collect for you.</p>`;
   } else if (tab === "up") {
+    { const r = window.KV && KV.relicOf("helios"); if (r) { const own = KV.hasRelic("sunstone"), can = kvPct() >= SUNSTONE.at, c = SUNSTONE.cost * KB().cost; h += own ? `<button class="row ok" disabled><span class="ico emo">${r.e}</span><span class="mid"><span class="nm">${r.n} · relic</span><span class="ds">${r.d}</span></span><span class="rt"><span class="own">Owned</span></span></button>` : can ? `<button class="row ${S.dust >= c ? "ok" : "no"}" data-relic="1"><span class="ico emo">${r.e}</span><span class="mid"><span class="nm">${r.n} · relic</span><span class="ds">${r.d}</span></span><span class="rt"><span class="cost">${fmt(c)}</span></span></button>` : `<button class="row locked" disabled><span class="ico emo">❔</span><span class="mid"><span class="nm">Something bright in the core…</span><span class="ds">Keep growing your star to find this relic (${Math.round(kvPct() * 100)}% / ${SUNSTONE.at * 100}%)</span></span></button>`; } }
     const a = availUps(); if (!a.length) h += `<p class="empty">No upgrades yet. Own 10 of something or keep tapping.</p>`;
     for (const u of a) { const ok = S.dust >= u.cost; h += `<button class="row ${ok ? "ok" : "no"}" data-up="${u.id}"><span class="ico emo">${u.e}</span><span class="mid"><span class="nm">${u.n.replace("  ·", " ·")}</span><span class="ds">${u.d}</span></span><span class="rt"><span class="cost">${fmt(u.cost)}</span></span></button>`; }
     h += `<p class="empty">${UPS.filter((u) => S.ups[u.id]).length} of ${UPS.length} upgrades owned</p>`;
@@ -605,6 +610,7 @@ function renderRail() { let h = "";
 rail.addEventListener("click", (e) => { const b = e.target.closest("[data-rb]"); if (!b) return; e.stopPropagation(); buyGen(GENS.find((x) => x.id === b.dataset.rb), 1, b); });
 ["pointerdown", "touchstart", "mousedown"].forEach((ev) => rail.addEventListener(ev, (e) => e.stopPropagation(), { passive: true }));
 $("list").addEventListener("click", (e) => {
+  if (e.target.closest("[data-relic]") && window.KV) { const c = SUNSTONE.cost * KB().cost; if (S.dust < c || KV.hasRelic("sunstone")) return tone(160, 0.1, "square", 0.02, 0.9); S.dust -= c; KV.grant("helios"); tone(1320, 0.3, "triangle", 0.05, 1.3); lastHTML = ""; render(); save(); return; }
   const b = e.target.closest("[data-buy]"), u = e.target.closest("[data-up]");
   if (b) buyGen(GENS.find((x) => x.id === b.dataset.buy), +b.dataset.k, b);
   if (u) { const x = UPS.find((y) => y.id === u.dataset.up); if (S.dust < x.cost) return tone(160, 0.1, "square", 0.02, 0.9); S.dust -= x.cost; S.ups[x.id] = 1; tone(880, 0.2, "triangle", 0.05, 1.5); toast(`${x.e} ${x.n.replace("  ·", " ·")}`); lastHTML = ""; render(); save(); }
@@ -656,11 +662,11 @@ function frame() {
   bloom.strength = (0.4 + 0.5 * THREE.MathUtils.smoothstep(camera.position.distanceTo(star.position), 7, 22)) + starPulse * 0.5 + (frenzyUntil > now() ? 0.4 : 0) + (shockT >= 0 ? 1.5 : 0);
   drawTap(dt, t);   // KING_PIXEL: the 3D scene still runs the game logic, but only the pixel canvas is drawn
   uiAcc += dt; saveAcc += dt;
-  if (uiAcc > 0.1) { uiAcc = 0; render(); for (const [id, n, f] of ACH) if (!S.ach[id] && f(S)) { S.ach[id] = 1; toast(`🏆 ${n}`); tone(1180, 0.25, "triangle", 0.05, 1.2); } }
+  if (uiAcc > 0.1) { uiAcc = 0; render(); try { window.KV && KV.setPct("helios", kvPct()); } catch (e) {} for (const [id, n, f] of ACH) if (!S.ach[id] && f(S)) { S.ach[id] = 1; toast(`🏆 ${n}`); tone(1180, 0.25, "triangle", 0.05, 1.2); } }
   if (saveAcc > 10) { saveAcc = 0; save(); }
   requestAnimationFrame(frame);
 }
-function offline() { const away = Math.min(now() - S.t, 8 * 3600e3); if (away > 60e3) { const g = perSec() * away / 1000 * (0.1 + 0.1 * lv("night"));   /* KING_OFFLINE10: away earns 10% of your live rate (King, Nov 15) */ if (g > 0) { S.dust += g; S.total += g; S.allTime += g; toast(`While you were away (${dur(away)}): +${fmt(g)} stardust`); } } S.t = now(); }
+function offline() { const away = Math.min(now() - S.t, 8 * 3600e3); if (away > 60e3) { const g = perSec() * away / 1000 * (0.1 + 0.1 * lv("night")) * KB().off;   /* KING_OFFLINE10: away earns 10% of your live rate (King, Nov 15) */ if (g > 0) { S.dust += g; S.total += g; S.allTime += g; toast(`While you were away (${dur(away)}): +${fmt(g)} stardust`); } } S.t = now(); }
 document.addEventListener("visibilitychange", () => { if (document.hidden) save(); else offline(); });
 window.addEventListener("pagehide", save);
 $("snd").innerHTML = S.sound ? SPK_ON : SPK_OFF;

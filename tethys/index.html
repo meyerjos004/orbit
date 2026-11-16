@@ -1,0 +1,98 @@
+<!doctype html>
+<html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<title>TETHYS</title><meta name="theme-color" content="#04121f">
+<link rel="preconnect" href="https://fonts.googleapis.com"><link href="https://fonts.googleapis.com/css2?family=Pixelify+Sans:wght@400;600;700&display=swap" rel="stylesheet">
+<script src="../kv.js"></script><script src="../kvgame.js"></script>
+<style>#cv{position:absolute;inset:0;width:100%;height:100%;display:block;image-rendering:pixelated;cursor:pointer;touch-action:manipulation}
+#zone{position:absolute;left:12px;bottom:10px;padding:5px 9px;background:rgba(0,0,0,.45);border:2px solid var(--line);font-size:13px;pointer-events:none}
+#tip{position:absolute;left:50%;top:44%;transform:translateX(-50%);padding:6px 12px;background:rgba(0,0,0,.5);border:2px solid var(--line);font-size:13px;pointer-events:none;white-space:nowrap}</style>
+</head><body>
+<div id="app">
+  <div id="top"><div class="row1"><div><div class="ttl">TETHYS · CREDITS</div><div class="big" id="cur">0</div><div class="rate" id="rate"></div></div><div class="btns"><button class="ib" id="snd"></button><span id="kvb"></span></div></div>
+    <div id="goal"><div class="gl"><span id="gtxt"></span><b id="gpct"></b></div><div class="bar"><i id="gbar"></i></div><div class="nx" id="gnext"></div></div></div>
+  <div id="stage"><canvas id="cv"></canvas><div id="zone"></div><div id="tip">Tap the water to ping sonar</div></div>
+  <div id="shop"></div>
+</div>
+<script>
+/* TETHYS — dive a submarine to the bottom of the ocean (10,000 m). KINGVERSE game 2. */
+KG.boot({ bg: "#04121f", acc: "#4df3ff", acc2: "#1e7bff", glow: "rgba(77,243,255,.5)", line: "#123a5c" });
+var OK = KV.mount("tethys", document.getElementById("kvb"));
+KG.muteBtn(document.getElementById("snd"));
+var S = KG.store("kv.tethys", { cr: 0, depth: 0, best: 0, lv: { engine: 1, hull: 0, lights: 0, sonar: 0 }, relic: false, t: Date.now() });
+var GOAL = 10000;
+var ZONES = [[0, "Sunlight zone", "#2f8fd8", "#1a5f9e", ["🐠", "🐟", "🐢"]], [200, "Twilight zone", "#1a4f86", "#0d2c55", ["🦑", "🪼", "🐟"]], [1000, "Midnight zone", "#0b2348", "#06142c", ["🐡", "🦐", "🪼"]], [4000, "Abyss", "#071433", "#030a1c", ["🐙", "🦀", "🦑"]], [6000, "Hadal trench", "#050b22", "#010412", ["🦞", "🐋", "👁️"]]];
+var UP = {
+  engine: { e: "🚀", n: "Engine", d: "Dive faster", base: 15, k: 1.6, max: 25 },
+  hull: { e: "🛡️", n: "Hull", d: "+500 m max depth", base: 25, k: 1.75, max: 20 },
+  lights: { e: "💡", n: "Floodlights", d: "Find credits on their own", base: 10, k: 1.55, max: 40 },
+  sonar: { e: "📡", n: "Sonar", d: "More credits per ping", base: 8, k: 1.5, max: 40 }
+};
+var B = KV.boost();
+function maxDepth() { return Math.min(GOAL, 300 + S.lv.hull * 500); }
+function speed() { return S.lv.engine * 0.8 * B.speed; }
+function rate() { return S.lv.lights * (1 + S.depth / 250) * B.earn; }
+function pingVal() { return (1 + S.lv.sonar * 2) * (1 + S.depth / 200) * B.tap * B.earn; }
+function cost(id) { var u = UP[id]; return Math.ceil(u.base * Math.pow(u.k, S.lv[id] - (id === "engine" ? 1 : 0)) * B.cost); }
+var RELIC = { at: 6000, cost: 250000 };
+function zone(d) { var z = ZONES[0]; ZONES.forEach(function (x) { if (d >= x[0]) z = x; }); return z; }
+function give(v) { S.cr += v; }
+KG.away(S, rate(), give);
+
+var cv = document.getElementById("cv"), cx = cv.getContext("2d"), stage = document.getElementById("stage"), W = 0, H = 0;
+function fit() { var r = stage.getBoundingClientRect(); W = Math.max(80, Math.round(r.width / 3)); H = Math.max(80, Math.round(r.height / 3)); cv.width = W; cv.height = H; cx.imageSmoothingEnabled = false; }
+window.addEventListener("resize", fit); fit();
+var bub = [], fish = [], rings = [], t0 = performance.now(), last = t0, tipGone = false;
+for (var i = 0; i < 40; i++) bub.push([Math.random(), Math.random(), 0.3 + Math.random()]);
+stage.addEventListener("pointerdown", function (e) {
+  var r = stage.getBoundingClientRect(), v = pingVal(); give(v); rings.push({ x: (e.clientX - r.left) / 3, y: (e.clientY - r.top) / 3, r: 2 });
+  KG.pop(stage, e.clientX - r.left, e.clientY - r.top, "+" + KG.fmt(v)); KG.tone(880, 0.12, "sine", 0.04, 0.6);
+  if (!tipGone) { tipGone = true; document.getElementById("tip").remove(); }
+});
+function drawSub(x, y, T) {
+  var c = cx; c.fillStyle = "#ffd25a"; c.fillRect(x - 9, y - 4, 18, 8); c.fillRect(x - 7, y - 6, 14, 2); c.fillRect(x - 3, y - 9, 6, 3);
+  c.fillStyle = "#c98a1e"; c.fillRect(x - 9, y + 2, 18, 2); c.fillStyle = "#4df3ff"; c.fillRect(x - 5, y - 2, 3, 3); c.fillRect(x, y - 2, 3, 3); c.fillRect(x + 5, y - 2, 3, 3);
+  c.fillStyle = "#8a6a2a"; c.fillRect(x + 9, y - 1 + (Math.sin(T * 20) > 0 ? 0 : 1), 2, 3);
+  if (S.lv.lights) { var g = c.createLinearGradient(x - 9, y, x - 9 - 40, y); g.addColorStop(0, "rgba(255,240,180,.45)"); g.addColorStop(1, "rgba(255,240,180,0)"); c.fillStyle = g; c.beginPath(); c.moveTo(x - 9, y - 1); c.lineTo(x - 50, y - 14); c.lineTo(x - 50, y + 14); c.closePath(); c.fill(); }
+}
+function frame(t) {
+  var dt = Math.min(0.1, (t - last) / 1000); last = t; var T = (t - t0) / 1000;
+  if (OK) {
+    var md = maxDepth(); if (S.depth < md) S.depth = Math.min(md, S.depth + speed() * dt); if (S.depth > S.best) S.best = S.depth;
+    give(rate() * dt); KV.setPct("tethys", S.best / GOAL);
+  }
+  var z = zone(S.depth), g = cx.createLinearGradient(0, 0, 0, H); g.addColorStop(0, z[2]); g.addColorStop(1, z[3]); cx.fillStyle = g; cx.fillRect(0, 0, W, H);
+  if (S.depth < 200) { cx.fillStyle = "rgba(255,255,255,.06)"; for (var k = 0; k < 6; k++) { var lx = (k * 37 + T * 6) % (W + 40) - 20; cx.fillRect(lx | 0, 0, 3, H); } }
+  var sp = speed() * (S.depth < maxDepth() ? 1 : 0);
+  bub.forEach(function (b) { b[1] -= (0.02 + sp * 0.004) * dt * b[2] * 3; if (b[1] < 0) { b[1] = 1; b[0] = Math.random(); } cx.fillStyle = "rgba(200,240,255,.5)"; cx.fillRect((b[0] * W) | 0, (b[1] * H) | 0, b[2] > 1 ? 2 : 1, b[2] > 1 ? 2 : 1); });
+  if (Math.random() < dt * 0.6 && fish.length < 6) { var dir = Math.random() < 0.5 ? 1 : -1; fish.push({ x: dir > 0 ? -10 : W + 10, y: 10 + Math.random() * (H - 30), v: dir * (6 + Math.random() * 10), e: z[4][Math.floor(Math.random() * z[4].length)] }); }
+  cx.font = "10px sans-serif"; cx.textBaseline = "middle";
+  for (var f = fish.length - 1; f >= 0; f--) { var F = fish[f]; F.x += F.v * dt; if (F.x < -20 || F.x > W + 20) { fish.splice(f, 1); continue; } cx.save(); cx.translate(F.x, F.y); if (F.v > 0) cx.scale(-1, 1); cx.fillText(F.e, -5, 0); cx.restore(); }
+  drawSub(W / 2, H * 0.42 + Math.sin(T * 1.5) * 2, T);
+  for (var r = rings.length - 1; r >= 0; r--) { var R = rings[r]; R.r += 60 * dt; cx.strokeStyle = "rgba(77,243,255," + Math.max(0, 1 - R.r / 50) + ")"; cx.strokeRect((R.x - R.r) | 0, (R.y - R.r) | 0, (R.r * 2) | 0, (R.r * 2) | 0); if (R.r > 50) rings.splice(r, 1); }
+  if (S.depth >= GOAL) { cx.fillStyle = "#1b1206"; cx.fillRect(0, H - 14, W, 14); cx.fillStyle = "#ffe14d"; cx.font = "8px sans-serif"; cx.fillText("THE BOTTOM · 10,000 m", 6, H - 7); }
+  ui(); requestAnimationFrame(frame);
+}
+var lastShop = "";
+function ui() {
+  document.getElementById("cur").textContent = KG.fmt(S.cr);
+  document.getElementById("rate").textContent = KG.fmt(rate()) + "/s · " + KG.fmt(pingVal()) + " per ping";
+  var p = Math.min(1, S.best / GOAL), md = maxDepth();
+  document.getElementById("gtxt").textContent = "Depth " + Math.floor(S.depth).toLocaleString() + " m / 10,000 m";
+  document.getElementById("gpct").textContent = Math.floor(p * 100) + "%"; document.getElementById("gbar").style.width = p * 100 + "%";
+  document.getElementById("gnext").textContent = S.best >= GOAL ? "You reached the bottom of the ocean. TETHYS complete!" : S.depth >= md - 0.5 ? "Hull limit at " + md.toLocaleString() + " m: upgrade the Hull to go deeper." : "Diving… next zone: " + (function () { for (var i = 0; i < ZONES.length; i++) if (ZONES[i][0] > S.depth) return ZONES[i][1] + " at " + ZONES[i][0].toLocaleString() + " m"; return "the bottom at 10,000 m"; })();
+  document.getElementById("zone").textContent = zone(S.depth)[1];
+  var h = '<div class="sh">UPGRADES</div>';
+  Object.keys(UP).forEach(function (id) { var u = UP[id], lv = S.lv[id], mx = lv >= u.max || (id === "hull" && maxDepth() >= GOAL), c = cost(id); h += KG.upRow({ id: id, e: u.e, n: u.n, d: u.d, cost: KG.fmt(c), lv: "Lv " + lv, ok: S.cr >= c, max: mx }); });
+  var R = KV.relicOf("tethys"); h += '<div class="sh">RELIC · BOOSTS ALL 5 GAMES</div>';
+  h += S.relic ? KG.upRow({ id: "relic", e: R.e, n: R.n, d: R.d, cls: "relic", max: true }) : S.best >= RELIC.at ? KG.upRow({ id: "relic", e: R.e, n: R.n, d: R.d, cost: KG.fmt(RELIC.cost * B.cost), cls: "relic", ok: S.cr >= RELIC.cost * B.cost }) : KG.upRow({ id: "relic", e: "❔", n: "Something glows in the trench…", d: "Reach " + RELIC.at.toLocaleString() + " m to find it", cost: "", cls: "relic", ok: false });
+  if (h !== lastShop) { document.getElementById("shop").innerHTML = h; lastShop = h; }
+}
+document.getElementById("shop").addEventListener("click", function (e) {
+  var b = e.target.closest("[data-u]"); if (!b) return; var id = b.dataset.u;
+  if (id === "relic") { var c = RELIC.cost * B.cost; if (S.relic || S.best < RELIC.at || S.cr < c) return KG.tone(140, 0.1); S.cr -= c; S.relic = true; KV.grant("tethys"); B = KV.boost(); KG.tone(1320, 0.3, "triangle", 0.05); S.save(); return; }
+  var u = UP[id], c2 = cost(id); if (S.lv[id] >= u.max || S.cr < c2) return KG.tone(140, 0.1);
+  S.cr -= c2; S.lv[id]++; KG.tone(660, 0.1, "triangle", 0.05); S.save();
+});
+setInterval(S.save, 10000);
+requestAnimationFrame(frame);
+</script></body></html>
