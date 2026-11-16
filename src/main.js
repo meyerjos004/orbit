@@ -305,7 +305,7 @@ setTimeout(() => setMode(tapMode ? "tap" : "view", true), 0);
    draws both screens: Tap (one big sun, tap anywhere) and View (the whole system, drag to pan, pinch/scroll to zoom). */
 const tv = document.createElement("canvas"); tv.id = "tapv"; tv.setAttribute("aria-label", "Your star system. Tap the sun to collect stardust. Tap comets for a bonus."); $("stage").insertBefore(tv, $("labels"));
 const tx = tv.getContext("2d"), pc = document.createElement("canvas"), px = pc.getContext("2d"), bgc = document.createElement("canvas");
-let SM = (() => { try { return (localStorage.getItem("helios.style") || S.style || "smooth") === "smooth"; /* cinematic is the default for everyone (King, Nov 15); Pixel is a choice */ } catch (e) { return false; } })();   // KING_SMOOTH: Pixel or Smooth look
+let SM = (() => { try { return (localStorage.getItem("helios.style") || S.style) === "smooth"; /* Pixel is the default; Smooth (cinematic) is a choice in the account menu */ } catch (e) { return false; } })();   // KING_SMOOTH: Pixel or Smooth look
 let tW = 0, tH = 0, tDpr = 1, PXS = 3, LW = 0, LH = 0, tc = null, tPulse = 0, tRot = 0, vZoom = 1, vPanX = 0, vPanY = 0;
 let tParts = [], tRings = [];
 const SUNPAL = [["#fffbd0", "#ffe600", "#ff8a00", "#ff2e6e"], ["#eaffff", "#00f0ff", "#2d7bff", "#7a2cff"], ["#ffffff", "#e6ccff", "#b86bff", "#ff2ea6"], ["#fff0fb", "#ff8ad8", "#ff2ea6", "#9b1cff"], ["#f4ffe0", "#7dff3a", "#00d68f", "#00a3ff"]];
