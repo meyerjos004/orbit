@@ -54,7 +54,14 @@
   var root, panel, statusEl, btn;
   function setStatus(t) { if (statusEl) statusEl.textContent = t || ""; }
   function who() { try { return JSON.parse(ls.get(WHO) || "null"); } catch (e) { return null; } }
-  function signOutLocal() { ls.del(TOK); ls.del(WHO); ls.del(LAST); }
+  function signOutLocal() { ls.del(TOK); ls.del(WHO); ls.del(LAST); ckDel(); }
+  /* KING_REMEMBER: a long-lived cookie survives deleting + re-adding the home-screen app (iOS copies Safari's cookies into a new web app).
+     It holds the login token, first name, masked number and the number itself (to text a fresh code if the token ever expires). */
+  var CK = "helios_auth", ASKED = "orbit.cloud.asked1";
+  function ckGet() { var m = document.cookie.match(/(?:^|; )helios_auth=([^;]*)/); try { return m ? JSON.parse(decodeURIComponent(m[1])) : null; } catch (e) { return null; } }
+  function ckSet(o) { try { document.cookie = CK + "=" + encodeURIComponent(JSON.stringify(o)) + "; Max-Age=34560000; Path=/orbit/; SameSite=Lax; Secure"; } catch (e) {} }
+  function ckDel() { try { document.cookie = CK + "=; Max-Age=0; Path=/orbit/; SameSite=Lax; Secure"; } catch (e) {} }
+  function remember(tok, player, id) { var c = ckGet() || {}; ckSet({ t: tok || c.t, n: (player && player.name) || c.n || "", m: (player && player.ident) || c.m || "", i: id || c.i || "" }); }
 
   var css = "\
 #oc-veil{position:fixed;inset:0;z-index:9998;background:rgba(3,3,10,.5);opacity:0;transition:opacity .25s}#oc-veil.show{opacity:1}\
@@ -82,10 +89,38 @@
 @media (prefers-reduced-motion:reduce){#oc-panel,#oc-veil,#oc-panel .boxes b,#oc-panel .go{transition:none;animation:none}#oc-panel .go.done svg path{animation:none;stroke-dashoffset:0}}";
   var CHECK = "<svg viewBox='0 0 24 24' fill='none' stroke='#fff' stroke-width='3' stroke-linecap='round' stroke-linejoin='round' aria-hidden='true'><path d='M5 12.5l4.5 4.5L19 7.5'/></svg>";
 
-  var step = "id", idVal = "", mode = "phone", sentVia = "phone";
+  var step = "id", idVal = "", mode = "phone", sentVia = "phone", nameDone = null;
   function render() {
     if (!open_) return;
     var skip = "<button class='lk' id='oc-skip'>Continue without saving</button>";
+    if (step === "name") {
+      panel.innerHTML = "<h3>What's your first name?</h3><p class='sub'>So we can say hi when you come back.</p>" +
+        "<input class='f' id='oc-nm' type='text' autocomplete='given-name' autocapitalize='words' maxlength='24' placeholder='First name'>" +
+        "<button class='go ink' id='oc-nmok'>Save</button><div class='msg' aria-live='polite'></div><div class='lks'><span></span><button class='lk' id='oc-nmskip'>Skip</button></div>";
+      statusEl = panel.querySelector(".msg"); var nm = panel.querySelector("#oc-nm");
+      var saveNm = function () { var v = nm.value.trim().slice(0, 24); if (!v) return nameDone && nameDone(); api("name", { token: ls.get(TOK), name: v }).catch(function () {});
+        try { var w = who() || {}; w.name = v; ls.set(WHO, JSON.stringify(w)); } catch (e) {} remember(null, { name: v }); nameDone && nameDone(); };
+      panel.querySelector("#oc-nmok").onclick = saveNm; nm.onkeydown = function (e) { if (e.key === "Enter") saveNm(); };
+      panel.querySelector("#oc-nmskip").onclick = function () { nameDone && nameDone(); };
+      setTimeout(function () { nm.focus(); }, 340); return;
+    }
+    if (step === "back") {
+      var c = ckGet() || {}, label = c.n ? c.n : (c.m || "your account");
+      panel.innerHTML = "<h3>Welcome back" + (c.n ? ", " + esc(c.n) : "") + "</h3>" +
+        "<button class='go blue' id='oc-as'>Log in as " + esc(label) + "</button><div class='msg' aria-live='polite'></div>" +
+        "<div class='lks'><button class='lk' id='oc-notme'>Not you?</button><button class='lk' id='oc-skip'>Continue without saving</button></div>";
+      statusEl = panel.querySelector(".msg");
+      panel.querySelector("#oc-notme").onclick = function () { ckDel(); step = "id"; render(); };
+      panel.querySelector("#oc-skip").onclick = function () { ls.set(SKIP, String(Date.now())); close(); };
+      panel.querySelector("#oc-as").onclick = function () { var b = this; b.disabled = true; b.textContent = "Logging in…";
+        api("load", { token: c.t }).then(function (r) {
+          if (r && r.ok) { ls.set(TOK, c.t); ls.set(WHO, JSON.stringify({ name: r.name || c.n, ident: c.m })); b.className = "go done"; b.innerHTML = CHECK;
+            setTimeout(function () { close(); if (r.save && better(r.save, ls.get(KEY))) applyCloud(r.save); }, 900); return; }
+          if (!c.i) { step = "id"; render(); return; }   // token expired and no number saved: normal sign in
+          idVal = c.i; sentVia = /@/.test(c.i) ? "email" : "phone"; api("request", { id: c.i }).then(function () { step = "code"; render(); }).catch(function () { b.disabled = false; b.textContent = "Log in as " + label; err("No connection. Try again."); });
+        }).catch(function () { b.disabled = false; b.textContent = "Log in as " + label; err("No connection. Try again."); }); };
+      return;
+    }
     if (step === "id") {
       var ph = mode === "phone";
       panel.innerHTML = "<h3>Save your progress</h3>" +
@@ -122,11 +157,12 @@
           delete gb.dataset.busy;
           if (!r || !r.ok) { bx.classList.add("bad"); ci.value = ""; paint(); err((r && r.err) || "That didn't work."); ci.focus(); return; }
           gb.className = "go done"; ci.blur();
-          ls.set(TOK, r.token); ls.set(WHO, JSON.stringify(r.player)); ls.del(SKIP);
+          ls.set(TOK, r.token); ls.set(WHO, JSON.stringify(r.player)); ls.del(SKIP); remember(r.token, r.player, idVal);
           var local = ls.get(KEY), useCloud = r.save && (!local || better(r.save, local));
-          setTimeout(function () { step = "id"; idVal = "";
-            if (useCloud) { applyCloud(r.save); return; }
-            ls.del(LAST); push(); close(); }, 1100);
+          setTimeout(function () { idVal = "";
+            var finish = function () { step = "id"; if (useCloud) { applyCloud(r.save); return; } ls.del(LAST); push(); close(); };
+            if (r.player && r.player.name) return finish();
+            nameDone = finish; step = "name"; render(); }, 1100);
         }).catch(function () { delete gb.dataset.busy; err("No connection. Try again."); });
       };
       ci.oninput = paint; ci.onfocus = paint; ci.onblur = paint; gb.onclick = go;
@@ -141,7 +177,7 @@
   var open_ = false, veil;
   function open() { open_ = true; render(); veil.hidden = false; panel.hidden = false; requestAnimationFrame(function () { requestAnimationFrame(function () { veil.classList.add("show"); panel.classList.add("show"); }); }); }
   function close() { open_ = false; veil.classList.remove("show"); panel.classList.remove("show"); setTimeout(function () { if (!open_) { veil.hidden = true; panel.hidden = true; } }, 340); }
-  window.orbitProfile = { open: function () { step = "id"; open(); }, signOut: function () { push(true); api("signout", { token: ls.get(TOK) }).catch(function () {}); signOutLocal(); }, who: who };   // for a menu entry later
+  window.orbitProfile = { token: function () { return ls.get(TOK); }, open: function () { step = "id"; open(); }, signOut: function () { push(true); api("signout", { token: ls.get(TOK) }).catch(function () {}); signOutLocal(); }, who: who };   // for a menu entry later
   function esc(s) { return String(s == null ? "" : s).replace(/[&<>"']/g, function (c) { return { "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]; }); }
 
   ready(function () {
@@ -152,11 +188,25 @@
     document.body.appendChild(panel);
     var tapFocus = function (e) { var t = e.target, i = t.closest && (t.closest("input") || (t.closest(".boxes") && panel.querySelector("#oc-code"))); if (i && document.activeElement !== i) i.focus(); };   // the game swallows taps; focus the field ourselves
     panel.addEventListener("touchend", tapFocus, { passive: true }); panel.addEventListener("click", tapFocus);
-    var sk = +ls.get(SKIP) || 0;   // ask on launch until signed in; "Continue without saving" quiets it for 3 days
-    if (!ls.get(TOK) && Date.now() - sk > 3 * 864e5 && !ss.get("orbit.cloud.asked")) { ss.set("orbit.cloud.asked", "1"); setTimeout(function () { if (document.getElementById("howto")) window.addEventListener("helios-howto-done", function () { setTimeout(open, 400); }, { once: true }); else open(); }, 900); }
+    /* KING_ASKONCE: the sign-in sheet pops up once per device (or "Log in as …" when this phone remembers a login),
+       and only after the update check so a reload can't swallow the first tap. */
+    // handoff from the old home-screen app: ?h=<token> signs this Safari page in, then the param is removed
+    var hq = (location.search.match(/[?&]h=([^&]+)/) || [])[1];
+    if (hq) { try { hq = decodeURIComponent(hq); history.replaceState(null, "", location.pathname); } catch (e) {}
+      if (!ls.get(TOK)) api("load", { token: hq }).then(function (r) { if (!r || !r.ok) return;   // came from their own signed-in app: sign this Safari page in quietly
+        ls.set(TOK, hq); ls.set(WHO, JSON.stringify({ name: r.name })); remember(hq, { name: r.name }); ls.set(ASKED, "1"); if (r.save && better(r.save, ls.get(KEY))) applyCloud(r.save); }).catch(function () {}); }
+    var cookie = ckGet();
+    if (hq) step = null;
+    else if (!ls.get(TOK) && cookie && cookie.t && !ls.get(ASKED)) { ls.set(ASKED, "1"); step = "back"; }
+    else if (!ls.get(TOK) && !ls.get(ASKED) && !ls.get(SKIP)) { ls.set(ASKED, "1"); }
+    else step = null;
+    if (step) { var go2 = function () { if (document.getElementById("howto")) window.addEventListener("helios-howto-done", function () { setTimeout(open, 400); }, { once: true }); else open(); };
+      Promise.race([window.ORBIT_FRESH || Promise.resolve("ok"), new Promise(function (r) { setTimeout(function () { r("ok"); }, 3000); })]).then(function (st) { if (st !== "reload") setTimeout(go2, 500); }); }
+    else step = "id";
     var tok = ls.get(TOK);
     if (tok) api("load", { token: tok }).then(function (r) {   // another device may have played further
       if (r && r.err === "signed_out") return signOutLocal();
+      if (r && r.ok) { var w = who() || {}; if (r.name && !w.name) { w.name = r.name; ls.set(WHO, JSON.stringify(w)); } remember(tok, { name: r.name || w.name, ident: w.ident }); }
       if (r && r.ok && r.save && better(r.save, ls.get(KEY))) applyCloud(r.save);
     }).catch(function () {});
     setInterval(function () { push(); }, 20000);
