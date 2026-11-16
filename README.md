@@ -1,4 +1,4 @@
-# ORBIT
+# HELIOS
 
 A 3D idle space game by King. Free to play and free to embed.
 
@@ -8,7 +8,7 @@ Progress saves in your own browser (no account). On iPhone: open in Safari → S
 
 ## Embed it anywhere
 ```html
-<iframe src="https://meyerjos004.github.io/orbit/" style="width:100%;height:100%;border:0" allow="fullscreen; autoplay" title="ORBIT"></iframe>
+<iframe src="https://meyerjos004.github.io/orbit/" style="width:100%;height:100%;border:0" allow="fullscreen; autoplay" title="HELIOS"></iframe>
 ```
 Saves are kept per site (each page that embeds it gets its own save).
 
