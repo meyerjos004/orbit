@@ -24,7 +24,7 @@ const GENS = [
 const MS = [10, 25, 50, 100, 150, 200];
 const UPS = [];
 GENS.forEach((g) => MS.forEach((at, k) => UPS.push({ id: g.id + at, g: g.id, at, cost: g.base * Math.pow(10, k + 1) * (k ? 2 : 1), n: g.n + ["  · spin up", " · gravity", " · clusters", " · resonance", " · fusion", " · singularity"][k], d: `${g.n} ×2 (needs ${at})`, e: g.e })));
-[[100, "Firm tap", "Taps ×2", "👆"], [5e3, "Solar flare", "Taps ×2", "👆"], [5e5, "Comet sense", "Comets come twice as often", "☄️"], [5e6, "Core heat", "Taps also give 1% of your /sec", "👆"], [5e7, "Stellar wind", "Taps ×3", "👆"], [5e9, "Tidal lock", "Everything ×1.5", "🌌"], [5e11, "Gravity well", "Everything ×2", "🌌"], [5e13, "Hand of god", "Taps give 3% of your /sec", "👆"]]
+[[100, "Firm tap", "Taps ×2", "👆"], [5e3, "Solar flare", "Taps ×2", "👆"], [5e5, "Comet sense", "Comets come twice as often", "☄️"], [5e6, "Core heat", "Taps also give 1% of your /sec", "👆"], [5e7, "Stellar wind", "Taps ×3", "👆"], [5e9, "Tidal lock", "Everything ×1.5", "🌌"], [5e11, "Gravity well", "Everything ×2", "🌌"], [5e13, "Hand of god", "Taps give +3% more of your /sec (4% total)", "👆"]]
   .forEach(([cost, n, d, e], i) => UPS.push({ id: "t" + i, cost, n, d, e }));
 UPS.sort((a, b) => a.cost - b.cost);
 const ACH = [
@@ -46,7 +46,10 @@ const baseMult = () => (1 + S.shards * 0.1) * (S.ups.t5 ? 1.5 : 1) * (S.ups.t6 ?
 const globalMult = () => baseMult() * (frenzyUntil > now() ? 7 : 1);
 const genRate = (g) => (S.own[g.id] || 0) * g.rate * genMult(g);
 const perSec = () => GENS.reduce((a, g) => a + genRate(g), 0) * globalMult();
-const tapVal = () => { let v = (S.ups.t0 ? 2 : 1) * (S.ups.t1 ? 2 : 1) * (S.ups.t4 ? 3 : 1); const ps = perSec(); if (S.ups.t3) v += ps * 0.01; if (S.ups.t7) v += ps * 0.03; return v * (1 + S.shards * 0.1) * (frenzyUntil > now() ? 7 : 1); };
+// KING_TAPSTACK: every tap upgrade stacks on the WHOLE tap. Flat tap gets the Everything/shard boosts; the % of /sec part already includes them.
+const tapMult = () => (S.ups.t0 ? 2 : 1) * (S.ups.t1 ? 2 : 1) * (S.ups.t4 ? 3 : 1);
+const tapPct = () => (S.ups.t3 ? 0.01 : 0) + (S.ups.t7 ? 0.03 : 0);
+const tapVal = () => (baseMult() + perSec() * tapPct()) * tapMult() * (frenzyUntil > now() ? 7 : 1);
 const R = 1.15;
 const cost = (g, k) => g.base * Math.pow(R, S.own[g.id] || 0) * (Math.pow(R, k) - 1) / (R - 1);
 const maxBuy = (g) => Math.max(0, Math.floor(Math.log(S.dust * (R - 1) / (g.base * Math.pow(R, S.own[g.id] || 0)) + 1) / Math.log(R)));
