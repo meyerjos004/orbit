@@ -276,16 +276,27 @@ const ray = new THREE.Raycaster(), ndc = new THREE.Vector2();
 let focusLock = 0; let drag = null; const ptrs = new Map(); let pinch0 = 0, zoom = 0, zoomT = 0, focus = null; const focusPos = new THREE.Vector3(), camTarget = new THREE.Vector3();
 const ZMIN = -4.2, ZMAX = 5.4; /* KING_ZOOMRANGE */ // exp(zoom) * camDist: ~0.04x (inside the motes) to ~100x (the galaxy)
 const setZoom = (z) => { zoomT = THREE.MathUtils.clamp(z, focus ? -5.6 : ZMIN, ZMAX); };
-canvas.addEventListener("pointerdown", (e) => { canvas.setPointerCapture?.(e.pointerId); ptrs.set(e.pointerId, { x: e.clientX, y: e.clientY }); if (ptrs.size === 2) { const [p, q] = [...ptrs.values()]; pinch0 = Math.hypot(p.x - q.x, p.y - q.y); drag = null; } else drag = { x: e.clientX, y: e.clientY, t: performance.now(), moved: 0 }; });
-canvas.addEventListener("pointermove", (e) => { if (!ptrs.has(e.pointerId)) return; ptrs.set(e.pointerId, { x: e.clientX, y: e.clientY });
+canvas.addEventListener("pointerdown", (e) => { try { canvas.setPointerCapture?.(e.pointerId); } catch (err) {} ptrs.set(e.pointerId, { x: e.clientX, y: e.clientY }); if (ptrs.size === 2) { const [p, q] = [...ptrs.values()]; pinch0 = Math.hypot(p.x - q.x, p.y - q.y); drag = null; } else drag = { x: e.clientX, y: e.clientY, t: performance.now(), moved: 0 }; });
+canvas.addEventListener("pointermove", (e) => { if (!ptrs.has(e.pointerId) || tapMode) return; ptrs.set(e.pointerId, { x: e.clientX, y: e.clientY });
   if (ptrs.size === 2) { const [p, q] = [...ptrs.values()], d = Math.hypot(p.x - q.x, p.y - q.y); if (pinch0) setZoom(zoomT - Math.log(d / pinch0) * 1.2); pinch0 = d; return; }
   if (!drag) return; const dx = e.clientX - drag.x, dy = e.clientY - drag.y; drag.moved += Math.abs(dx) + Math.abs(dy); drag.x = e.clientX; drag.y = e.clientY; if (drag.moved > 8) { yawVel = dx * 0.004; /* KING_DRAGDIR */ camPitch = THREE.MathUtils.clamp(camPitch + dy * 0.004, -1.2, 1.35); } });
 const endPtr = (e) => { ptrs.delete(e.pointerId); if (ptrs.size < 2) pinch0 = 0; };
-canvas.addEventListener("pointerup", (e) => { const d = drag, multi = ptrs.size > 1; endPtr(e); drag = null; if (multi || !d || d.moved > 8) return; tapAt(e.clientX, e.clientY); });
+canvas.addEventListener("pointerup", (e) => { const d = drag, multi = ptrs.size > 1; endPtr(e); drag = null; if (tapMode) return tapAt(e.clientX, e.clientY); if (multi || !d || d.moved > 8) return; tapAt(e.clientX, e.clientY); });
 canvas.addEventListener("pointercancel", endPtr);
-canvas.addEventListener("wheel", (e) => { e.preventDefault(); setZoom(zoomT + Math.sign(e.deltaY) * Math.min(0.6, Math.abs(e.deltaY) / 250)); $("hint").classList.add("gone"); }, { passive: false });
-canvas.addEventListener("dblclick", () => { focus = null; setZoom(0); });
+canvas.addEventListener("wheel", (e) => { e.preventDefault(); if (tapMode) return; setZoom(zoomT + Math.sign(e.deltaY) * Math.min(0.6, Math.abs(e.deltaY) / 250)); $("hint").classList.add("gone"); }, { passive: false });
+canvas.addEventListener("dblclick", () => { if (tapMode) return; focus = null; setZoom(0); });
 $("zin").onclick = () => setZoom(zoomT - 0.7); $("zout").onclick = () => setZoom(zoomT + 0.7); $("zhome").onclick = () => { focus = null; setZoom(0); };
+
+/* KING_TAPMODE: two screens. Tap = just the star (tap anywhere). View = the whole universe (drag, zoom, tap the star). */
+let tapMode = (() => { try { return localStorage.getItem("orbit.mode") === "tap"; } catch (e) { return false; } })();
+const modeSw = document.createElement("div"); modeSw.id = "modesw"; modeSw.setAttribute("role", "tablist"); modeSw.setAttribute("aria-label", "Screen");
+modeSw.innerHTML = `<button role="tab" data-m="tap">Tap</button><button role="tab" data-m="view">View</button>`; $("stage").appendChild(modeSw);
+["pointerdown", "touchstart", "mousedown"].forEach((ev) => modeSw.addEventListener(ev, (e) => e.stopPropagation(), { passive: true }));
+function setMode(m, quiet) { tapMode = m === "tap"; try { localStorage.setItem("orbit.mode", m); } catch (e) {} $("app").classList.toggle("tapmode", tapMode);
+  modeSw.querySelectorAll("button").forEach((b) => { const on = b.dataset.m === m; b.classList.toggle("on", on); b.setAttribute("aria-selected", on); });
+  if (cine) setCine(false); focus = null; setZoom(tapMode ? Math.log(14 / camDist) : 0); if (!quiet) tone(tapMode ? 520 : 780, 0.08, "sine", 0.03, 1.1); }
+modeSw.addEventListener("click", (e) => { const b = e.target.closest("[data-m]"); if (b) setMode(b.dataset.m); });
+setTimeout(() => setMode(tapMode ? "tap" : "view", true), 0);
 /* KING_CINE: cinema mode, hides UI and flies a slow tour */
 let cine = false, cineT = 0, cineAuto = false, lastInput = performance.now(), visitT = 0; const setCine = (v, auto = false) => { cine = v; cineAuto = v && auto; visitT = 0; $("app").classList.toggle("cine", v); focus = null; cineT = 0; setTimeout(resize, 30); };
 $("cine").onclick = () => setCine(!cine);
@@ -295,13 +306,16 @@ function pickBody(r) { let best = null, bd = 1e9; for (const id in bodies) for (
 function tapAt(cx, cy) {
   const b = canvas.getBoundingClientRect(); ndc.set(((cx - b.left) / W) * 2 - 1, -((cy - b.top) / H) * 2 + 1); ray.setFromCamera(ndc, camera);
   if (comet && ray.ray.distanceToPoint(comet.p) < 2.6) return catchComet();
+  if (tapMode) return tapStar(cx, cy, b);   // KING_TAPMODE: anywhere on screen taps the star
   const pb = pickBody(ray), starD = ray.ray.distanceToPoint(star.position) < 4.6 ? ray.ray.origin.distanceTo(star.position) : 1e9;
   if (pb && (!starD || ray.ray.origin.distanceTo(pb.obj.position) < starD)) { focus = pb; focusLock = 0; setZoom(Math.log((pb.size || 1) * 7 / camDist)); toast(`${pb.label} · tap the star to go back`); tone(700, 0.1, "sine", 0.04, 1.2); return; }
-  if (starD < 1e9) { if (focus) { focus = null; setZoom(0); }
-    const v = tapVal(); S.dust += v; S.total += v; S.allTime += v; S.taps++; starPulse = 1; shake = Math.min(1, shake + 0.25);
-    const hit = ray.ray.closestPointToPoint(star.position, new THREE.Vector3()).setLength(3.1); burst(hit, ERA[S.novas % ERA.length][0], 14, 5);
-    floatText(cx - b.left, cy - b.top, "+" + fmt(v)); tapSound(); buzz(6); $("hint").classList.add("gone"); render();
-  }
+  if (starD < 1e9) { if (focus) { focus = null; setZoom(0); } tapStar(cx, cy, b); }
+}
+function tapStar(cx, cy, b) {
+  const v = tapVal(); S.dust += v; S.total += v; S.allTime += v; S.taps++; starPulse = 1; shake = Math.min(1, shake + 0.25);
+  const hit = ray.ray.closestPointToPoint(star.position, new THREE.Vector3()).sub(star.position); if (hit.lengthSq() < 1e-6) hit.set(Math.random() - 0.5, Math.random() - 0.5, Math.random() - 0.5); hit.setLength(3.1).add(star.position);
+  burst(hit, ERA[S.novas % ERA.length][0], 14, 5);
+  floatText(cx - b.left, cy - b.top, "+" + fmt(v)); tapSound(); buzz(6); $("hint").classList.add("gone"); render();
 }
 function floatText(x, y, t, big) { const d = document.createElement("div"); d.className = "float" + (big ? " big" : ""); d.textContent = t; d.style.left = x + (Math.random() - 0.5) * 30 + "px"; d.style.top = y - 12 + "px"; $("floats").appendChild(d); setTimeout(() => d.remove(), 1100); }
 function catchComet() {
@@ -391,7 +405,7 @@ function frame() {
   if (!comet && now() > nextComet) { spawnComet(); nextComet = now() + (S.ups.t2 ? 0.5 : 1) * (40000 + Math.random() * 50000); }
   // camera: slow drift + flick
   yawVel *= 0.94; camYaw += 0.025 * dt + yawVel;
-  if (!cine && performance.now() - lastInput > 60000) setCine(true, true);
+  if (!cine && !tapMode && performance.now() - lastInput > 60000) setCine(true, true);
   if (cine) { visitT += dt; if (visitT > 22) { visitT = 0; if (focus) { focus = null; } else { const pool = Object.keys(bodies).flatMap((k) => bodies[k] || []).filter((b) => b && b.obj && b.obj.visible); if (pool.length) { focus = pool[(Math.random() * pool.length) | 0]; focusLock = 0; } } } }
   if (cine && focus) { cineT += dt; camYaw += 0.08 * dt; zoomT += (Math.log((focus.size || 1) * 5 / camDist) - zoomT) * Math.min(1, dt * 0.6); }
   else if (cine) { cineT += dt; camYaw += 0.05 * dt; zoomT = -1.1 + 1.9 * (0.5 - 0.5 * Math.cos(cineT * 0.09)); camPitch += (0.18 + 0.22 * Math.sin(cineT * 0.05) - camPitch) * Math.min(1, dt * 0.5); } shake *= 0.9; starPulse = Math.max(0, starPulse - dt * 3.5);

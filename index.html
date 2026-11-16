@@ -128,6 +128,15 @@ html,body{margin:0;height:100%;background:var(--bg);color:var(--txt);font:14px/1
 .rb:focus-visible .ico{outline:2px solid #a78bfa;outline-offset:2px}
 }
 @media (prefers-reduced-motion:reduce){.rb .ico{animation:none!important;transition:none}}
+
+/* KING_TAPMODE */
+#modesw{position:absolute;z-index:5;left:50%;top:calc(14px + env(safe-area-inset-top));transform:translateX(-50%);display:flex;padding:3px;border-radius:999px;background:rgba(10,10,16,.55);-webkit-backdrop-filter:blur(14px);backdrop-filter:blur(14px);border:1px solid rgba(255,255,255,.08)}
+#modesw button{all:unset;cursor:pointer;padding:6px 14px;border-radius:999px;color:var(--mut,#8b8a99);font:600 12px/1 Inter,system-ui,sans-serif;transition:background .2s,color .2s;-webkit-tap-highlight-color:transparent}
+#modesw button.on{background:rgba(255,255,255,.12);color:#ecebf3}
+#modesw button:focus-visible{outline:2px solid #a78bfa;outline-offset:2px}
+.tapmode #zoombar,.tapmode #labels,.tapmode #hint{opacity:0;pointer-events:none;transition:opacity .3s}
+.cine #modesw{display:none}
+@media (min-width:900px){#modesw{top:16px}}
 </style>
 </head>
 <body>
