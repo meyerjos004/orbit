@@ -2,6 +2,8 @@
    Loaded BEFORE app.js so a cloud save is in place before the game reads localStorage. */
 (function () {
   "use strict";
+  // KING_HOWTOSEEN: arriving through the walkthrough link means the walkthrough is done; remember it in a cookie so Safari and the re-added app skip it
+  try { if (/[?&]h=/.test(location.search)) document.cookie = "helios_howto=1; Max-Age=34560000; Path=/orbit/; SameSite=Lax; Secure"; } catch (e) {}
   var KEY = "kairos.orbit.v2", TOK = "orbit.cloud.token", WHO = "orbit.cloud.who", PEND = "orbit.cloud.pending", LAST = "orbit.cloud.lastpush", SKIP = "orbit.cloud.skip";
   var API = "https://cqetawiuvnwkmmcrluxj.supabase.co/rest/v1/rpc/orbit_api";
   var PK = "sb_publishable_lpyZu3BGBfMRHRzEqLmqXw_VbxFAN5U";
@@ -114,7 +116,7 @@
       panel.querySelector("#oc-skip").onclick = function () { ls.set(SKIP, String(Date.now())); close(); };
       panel.querySelector("#oc-as").onclick = function () { var b = this; b.disabled = true; b.textContent = "Logging in…";
         api("load", { token: c.t }).then(function (r) {
-          if (r && r.ok) { ls.set(TOK, c.t); ls.set(WHO, JSON.stringify({ name: r.name || c.n, ident: c.m })); b.className = "go done"; b.innerHTML = CHECK;
+          if (r && r.ok) { ls.set(TOK, c.t); ls.set(WHO, JSON.stringify({ name: r.name || c.n, ident: c.m })); try { document.cookie = "helios_howto=1; Max-Age=34560000; Path=/orbit/; SameSite=Lax; Secure"; localStorage.setItem("helios.howto2", "1"); } catch (e) {} b.className = "go done"; b.innerHTML = CHECK;
             setTimeout(function () { close(); if (r.save && better(r.save, ls.get(KEY))) applyCloud(r.save); }, 900); return; }
           if (!c.i) { step = "id"; render(); return; }   // token expired and no number saved: normal sign in
           idVal = c.i; sentVia = /@/.test(c.i) ? "email" : "phone"; api("request", { id: c.i }).then(function () { step = "code"; render(); }).catch(function () { b.disabled = false; b.textContent = "Log in as " + label; err("No connection. Try again."); });
@@ -176,8 +178,8 @@
   function err(t) { if (!statusEl) return; statusEl.className = "msg err"; statusEl.textContent = t; }
   var open_ = false, veil;
   function open() { open_ = true; render(); veil.hidden = false; panel.hidden = false; requestAnimationFrame(function () { requestAnimationFrame(function () { veil.classList.add("show"); panel.classList.add("show"); }); }); }
-  function close() { open_ = false; veil.classList.remove("show"); panel.classList.remove("show"); setTimeout(function () { if (!open_) { veil.hidden = true; panel.hidden = true; } }, 340); }
-  window.orbitProfile = { token: function () { return ls.get(TOK); }, open: function () { step = "id"; open(); }, signOut: function () { push(true); api("signout", { token: ls.get(TOK) }).catch(function () {}); signOutLocal(); }, who: who };   // for a menu entry later
+  function close() { try { window.acctPaint && window.acctPaint(); } catch (e) {} open_ = false; veil.classList.remove("show"); panel.classList.remove("show"); setTimeout(function () { if (!open_) { veil.hidden = true; panel.hidden = true; } }, 340); }
+  window.orbitProfile = { token: function () { return ls.get(TOK); }, open: function () { step = "id"; open(); }, signOut: function () { push(true); api("signout", { token: ls.get(TOK) }).catch(function () {}); signOutLocal(); try { window.acctPaint && window.acctPaint(); } catch (e) {} }, who: who };   // for a menu entry later
   function esc(s) { return String(s == null ? "" : s).replace(/[&<>"']/g, function (c) { return { "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]; }); }
 
   ready(function () {
@@ -203,9 +205,29 @@
     if (step) { var go2 = function () { if (document.getElementById("howto")) window.addEventListener("helios-howto-done", function () { setTimeout(open, 400); }, { once: true }); else open(); };
       Promise.race([window.ORBIT_FRESH || Promise.resolve("ok"), new Promise(function (r) { setTimeout(function () { r("ok"); }, 3000); })]).then(function (st) { if (st !== "reload") setTimeout(go2, 500); }); }
     else step = "id";
+
+    /* KING_ACCT: account button (top right): sign in / out any time + the Pixel | Smooth look */
+    var ab = document.getElementById("acct"), am = document.getElementById("acctm");
+    var PERSON = "<svg viewBox='0 0 24 24' width='20' height='20' fill='none' stroke='currentColor' stroke-width='2' stroke-linecap='round' aria-hidden='true'><circle cx='12' cy='8' r='4'/><path d='M4 21c1.5-4 4.5-6 8-6s6.5 2 8 6'/></svg>";
+    window.acctPaint = function () { if (!ab) return; var w = who(), on = !!ls.get(TOK); ab.innerHTML = on && w && w.name ? esc(w.name.charAt(0).toUpperCase()) : PERSON; ab.setAttribute("aria-label", on ? "Signed in" + (w && w.name ? " as " + w.name : "") + ". Account and look" : "Sign in. Account and look"); };
+    var hideM = function () { am.hidden = true; ab.setAttribute("aria-expanded", "false"); };
+    if (ab && am) { acctPaint();
+      ab.onclick = function (e) { e.stopPropagation(); if (!am.hidden) return hideM(); var w = who(), on = !!ls.get(TOK), st = ls.get("helios.style") || (document.documentElement.classList.contains("smooth") ? "smooth" : "pixel");
+        am.innerHTML = "<div class='who'>" + (on ? "Signed in" + (w && w.name ? " as " + esc(w.name) : "") + "<small>Your progress saves across devices</small>" : "Not signed in<small>Sign in to save your progress</small>") + "</div>" +
+          (on ? "<button class='cta ghost' id='am-out'>Sign out</button>" : "<button class='cta' id='am-in'>Sign in</button>") +
+          "<div class='lab'>Look</div><div class='seg' role='radiogroup' aria-label='Look'><button role='radio' data-st='pixel'>Pixel</button><button role='radio' data-st='smooth'>Smooth</button></div>";
+        am.querySelectorAll("[data-st]").forEach(function (b) { var sel = b.dataset.st === st; b.classList.toggle("on", sel); b.setAttribute("aria-checked", sel);
+          b.onclick = function () { window.heliosStyle && window.heliosStyle(b.dataset.st); am.querySelectorAll("[data-st]").forEach(function (x) { x.classList.toggle("on", x === b); x.setAttribute("aria-checked", x === b); }); setTimeout(function () { push(); }, 600); }; });
+        var bi = document.getElementById("am-in"), bo = document.getElementById("am-out");
+        if (bi) bi.onclick = function () { hideM(); var c = ckGet(); step = c && c.t ? "back" : "id"; open(); };
+        if (bo) bo.onclick = function () { window.orbitProfile.signOut(); hideM(); acctPaint(); };
+        am.hidden = false; ab.setAttribute("aria-expanded", "true"); var f = am.querySelector("button"); f && f.focus(); };
+      document.addEventListener("pointerdown", function (e) { if (!am.hidden && !am.contains(e.target) && !ab.contains(e.target)) hideM(); }, true);
+      am.addEventListener("keydown", function (e) { if (e.key === "Escape") { hideM(); ab.focus(); } }); }
     var tok = ls.get(TOK);
     if (tok) api("load", { token: tok }).then(function (r) {   // another device may have played further
       if (r && r.err === "signed_out") return signOutLocal();
+      if (r && r.ok && r.save && r.save.style && !ls.get("helios.style") && window.heliosStyle) window.heliosStyle(r.save.style);
       if (r && r.ok) { var w = who() || {}; if (r.name && !w.name) { w.name = r.name; ls.set(WHO, JSON.stringify(w)); } remember(tok, { name: r.name || w.name, ident: w.ident }); }
       if (r && r.ok && r.save && better(r.save, ls.get(KEY))) applyCloud(r.save);
     }).catch(function () {});

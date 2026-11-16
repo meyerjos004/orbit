@@ -305,6 +305,7 @@ setTimeout(() => setMode(tapMode ? "tap" : "view", true), 0);
    draws both screens: Tap (one big sun, tap anywhere) and View (the whole system, drag to pan, pinch/scroll to zoom). */
 const tv = document.createElement("canvas"); tv.id = "tapv"; tv.setAttribute("aria-label", "Your star system. Tap the sun to collect stardust. Tap comets for a bonus."); $("stage").insertBefore(tv, $("labels"));
 const tx = tv.getContext("2d"), pc = document.createElement("canvas"), px = pc.getContext("2d"), bgc = document.createElement("canvas");
+let SM = (() => { try { return (localStorage.getItem("helios.style") || S.style) === "smooth"; } catch (e) { return false; } })();   // KING_SMOOTH: Pixel or Smooth look
 let tW = 0, tH = 0, tDpr = 1, PXS = 3, LW = 0, LH = 0, tc = null, tPulse = 0, tRot = 0, vZoom = 1, vPanX = 0, vPanY = 0;
 let tParts = [], tRings = [];
 const SUNPAL = [["#fffbd0", "#ffe600", "#ff8a00", "#ff2e6e"], ["#eaffff", "#00f0ff", "#2d7bff", "#7a2cff"], ["#ffffff", "#e6ccff", "#b86bff", "#ff2ea6"], ["#fff0fb", "#ff8ad8", "#ff2ea6", "#9b1cff"], ["#f4ffe0", "#7dff3a", "#00d68f", "#00a3ff"]];
@@ -312,12 +313,18 @@ const BAY = [0, 8, 2, 10, 12, 4, 14, 6, 3, 11, 1, 9, 15, 7, 13, 5], bay = (x, y)
 const hash = (x, y) => { let h = (x * 374761393 + y * 668265263) | 0; h = (h ^ (h >>> 13)) * 1274126177; return ((h ^ (h >>> 16)) >>> 0) / 4294967296; };
 const hex = (h) => [parseInt(h.slice(1, 3), 16), parseInt(h.slice(3, 5), 16), parseInt(h.slice(5, 7), 16)];
 const pal = () => SUNPAL[S.novas % SUNPAL.length];
+function fr(g, x, y, w, h) { if (SM) { g.beginPath(); g.arc(x + w / 2, y + h / 2, Math.max(0.5, Math.max(w, h) * 0.55), 0, 6.283); g.fill(); } else g.fillRect(x, y, w, h); }
+function dot(g, x, y, sz, c) { g.fillStyle = c; if (SM) { g.beginPath(); g.arc(x + sz / 2, y + sz / 2, Math.max(0.45, sz * 0.55), 0, 6.283); g.fill(); } else g.fillRect(x | 0, y | 0, sz, sz); }
 let tDots = [];
 function tSize() { const r = tv.getBoundingClientRect(); if (!r.width) return; tDpr = Math.min(2, devicePixelRatio || 1); tW = r.width; tH = r.height; tv.width = Math.round(tW * tDpr); tv.height = Math.round(tH * tDpr);
   PXS = Math.max(2, Math.round(Math.min(tW, tH) / 210)); LW = Math.ceil(tW / PXS); LH = Math.ceil(tH / PXS); pc.width = LW; pc.height = LH; bgc.width = LW; bgc.height = LH; paintBg();
   tDots = Array.from({ length: Math.round(LW * LH / 140) }, (_, i) => ({ x: (hash(i, 7) * LW) | 0, y: (hash(i, 9) * LH) | 0, c: ["#ffffff", "#9ff8ff", "#ffe6ff", "#fff59a"][i % 4], p: hash(i, 3) * 6.28, s: 0.6 + hash(i, 5) * 2.2, big: hash(i, 11) > 0.93 })); }
 // colorful space: violet → blue, dithered bands, two neon nebula clouds
-function paintBg() { const g = bgc.getContext("2d"), im = g.createImageData(LW, LH), d = im.data;
+function paintBg() { if (SM) { bgc.width = Math.round(tW * tDpr); bgc.height = Math.round(tH * tDpr); const g = bgc.getContext("2d"), W = bgc.width, H = bgc.height;
+    const lg = g.createLinearGradient(0, 0, 0, H); lg.addColorStop(0, "#3a0f7a"); lg.addColorStop(0.35, "#2a0e63"); lg.addColorStop(0.7, "#1a1a6e"); lg.addColorStop(1, "#0c2d7a"); g.fillStyle = lg; g.fillRect(0, 0, W, H);
+    for (const [nx, ny, nc, na] of [[0.25, 0.3, "255,46,166", 0.42], [0.78, 0.7, "0,200,255", 0.38], [0.6, 0.15, "122,44,255", 0.3]]) { const r = na * W, rg = g.createRadialGradient(nx * W, ny * H, 0, nx * W, ny * H, r); rg.addColorStop(0, `rgba(${nc},.42)`); rg.addColorStop(1, `rgba(${nc},0)`); g.fillStyle = rg; g.fillRect(0, 0, W, H); }
+    return; }
+  const g = bgc.getContext("2d"), im = g.createImageData(LW, LH), d = im.data;
   const stops = [hex("#3a0f7a"), hex("#2a0e63"), hex("#1a1a6e"), hex("#0c2d7a")], neb = [[0.25, 0.3, hex("#ff2ea6"), 0.42], [0.78, 0.7, hex("#00c8ff"), 0.38], [0.6, 0.15, hex("#7a2cff"), 0.3]];
   for (let y = 0; y < LH; y++) for (let x = 0; x < LW; x++) { const f = (y / LH) * (stops.length - 1), k = Math.min(stops.length - 2, Math.floor(f)), fr = f - k, c = fr > bay(x, y) ? stops[k + 1] : stops[k];
     let r = c[0], gg = c[1], b = c[2];
@@ -325,16 +332,25 @@ function paintBg() { const g = bgc.getContext("2d"), im = g.createImageData(LW, 
     const i = (y * LW + x) * 4; d[i] = r; d[i + 1] = gg; d[i + 2] = b; d[i + 3] = 255; }
   g.putImageData(im, 0, 0); }
 addEventListener("resize", tSize); tSize();
+window.heliosStyle = (v) => { SM = v === "smooth"; S.style = v; try { localStorage.setItem("helios.style", v); } catch (e) {} document.documentElement.classList.toggle("smooth", SM); sprCache.clear(); tSize(); pixIcons(); };
+document.documentElement.classList.toggle("smooth", SM);
 // dithered pixel disc (the sun and every planet); light from the upper left
-function disc(g, cx, cy, R, P, opt = {}) { cx |= 0; cy |= 0; const RR = R * R, cols = P.map(hex);
+function disc(g, cx, cy, R, P, opt = {}) { if (SM) return discS(g, cx, cy, R, P, opt); cx |= 0; cy |= 0; const RR = R * R, cols = P.map(hex);
   for (let y = -R; y <= R; y++) for (let x = -R; x <= R; x++) { const q = x * x + y * y; if (q > RR) continue;
     let v = Math.sqrt(q) / R * 0.75 + (x + y) / (R * 2) * 0.55 + 0.2; if (opt.bands) v = v * 0.5 + (Math.sin((y / R) * opt.bands + opt.ph) * 0.5 + 0.5) * 0.6; if (opt.spots && hash(x + opt.seed, y) > 1 - opt.spots) v -= 0.35;
     if (opt.land && hash((x + opt.seed * 7) >> 1, y >> 1) > 0.62) { g.fillStyle = opt.land[v + bay(x, y) * 0.3 > 0.6 ? 1 : 0]; g.fillRect(cx + x, cy + y, 1, 1); continue; }
     const k = Math.max(0, Math.min(cols.length - 1, Math.floor(v * (cols.length - 1) + bay(x + cx, y + cy) * 0.9))); g.fillStyle = P[k]; g.fillRect(cx + x, cy + y, 1, 1); } }
+
+function discS(g, cx, cy, R, P, opt = {}) { if (R <= 0) return; g.save(); g.beginPath(); g.arc(cx, cy, R, 0, 6.283); g.clip();
+  const rg = g.createRadialGradient(cx - R * 0.38, cy - R * 0.38, R * 0.05, cx, cy, R * 1.05); P.forEach((c, i) => rg.addColorStop(i / (P.length - 1), c)); g.fillStyle = rg; g.fillRect(cx - R, cy - R, R * 2, R * 2);
+  if (opt.bands) { g.globalAlpha = 0.35; for (let k = -R; k < R; k += R / 4.5) { g.fillStyle = (Math.round(k / (R / 4.5)) + (opt.ph | 0)) & 1 ? P[0] : P[P.length - 1]; g.fillRect(cx - R, cy + k, R * 2, R / 9 + Math.sin(k + opt.ph) * R / 30); } g.globalAlpha = 1; }
+  if (opt.land) { g.fillStyle = opt.land[1]; for (let k = 0; k < 5; k++) { const a = hash(k, opt.seed | 0) * 6.28, d = hash(k + 9, opt.seed | 0) * R * 0.7; g.beginPath(); g.ellipse(cx + Math.cos(a) * d, cy + Math.sin(a) * d, R * (0.18 + hash(k, 4) * 0.2), R * (0.12 + hash(k, 6) * 0.14), a, 0, 6.283); g.fill(); } }
+  if (opt.spots) { g.fillStyle = "rgba(0,0,0,.18)"; for (let k = 0; k < 6; k++) { const a = hash(k, (opt.seed | 0) + 3) * 6.28, d = hash(k + 2, (opt.seed | 0) + 5) * R * 0.75; g.beginPath(); g.arc(cx + Math.cos(a) * d, cy + Math.sin(a) * d, R * (0.08 + hash(k, 8) * 0.12), 0, 6.283); g.fill(); } }
+  const sh = g.createRadialGradient(cx - R * 0.3, cy - R * 0.3, R * 0.6, cx, cy, R * 1.02); sh.addColorStop(0, "rgba(0,0,0,0)"); sh.addColorStop(1, "rgba(10,0,40,.35)"); g.fillStyle = sh; g.fillRect(cx - R, cy - R, R * 2, R * 2); g.restore(); }
 const sprCache = new Map();
-function sprite(id, i, R) { const key = id + i + ":" + R + ":" + (S.novas % 5); let c = sprCache.get(key); if (c) return c; if (sprCache.size > 300) sprCache.clear();
-  const pad = id === "giant" || id === "hole" || id === "ring" ? R * 2 + 3 : 2, n = (R + pad) * 2 + 1; c = document.createElement("canvas"); c.width = c.height = n; const g = c.getContext("2d"), m = R + pad;
-  const ell = (rx, ry, colA, colB, back) => { for (let a = 0; a < 6.283; a += 0.6 / Math.max(rx, 4)) { const yy = Math.sin(a) * ry; if (back ? yy > 0 : yy < 0) continue; g.fillStyle = (Math.round(a * 9) & 1) ? colA : colB; g.fillRect(m + Math.round(Math.cos(a) * rx), m + Math.round(yy), 1, 1); } };
+function sprite(id, i, R) { const key = id + i + ":" + R + ":" + (S.novas % 5) + (SM ? "s" + PXS * tDpr : ""); let c = sprCache.get(key); if (c) return c; if (sprCache.size > 300) sprCache.clear();
+  const SC = SM ? PXS * tDpr : 1, pad = id === "giant" || id === "hole" || id === "ring" ? R * 2 + 3 : 2, n = (R + pad) * 2 + 1; c = document.createElement("canvas"); c.width = c.height = Math.ceil(n * SC); c.sc = SC; const g = c.getContext("2d"), m = R + pad; g.scale(SC, SC);
+  const ell = (rx, ry, colA, colB, back) => { if (SM) { g.lineWidth = Math.max(0.8, rx / 9); g.strokeStyle = colA; g.beginPath(); g.ellipse(m, m, rx, ry, 0, back ? Math.PI : 0, back ? 2 * Math.PI : Math.PI); g.stroke(); return; } for (let a = 0; a < 6.283; a += 0.6 / Math.max(rx, 4)) { const yy = Math.sin(a) * ry; if (back ? yy > 0 : yy < 0) continue; g.fillStyle = (Math.round(a * 9) & 1) ? colA : colB; g.fillRect(m + Math.round(Math.cos(a) * rx), m + Math.round(yy), 1, 1); } };
   if (id === "moon") disc(g, m, m, R, [["#fbf3ff", "#d6c4ff", "#9a7ce8", "#4b2f8f"], ["#fff6e6", "#ffcfa0", "#d68a5a", "#7a3d2a"], ["#eafff8", "#a8f0e0", "#5fb8b0", "#245a63"], ["#fff0ff", "#ffb8f0", "#d66ad0", "#6a2a8a"]][i % 4], { spots: 0.12, seed: i * 13 });
   else if (id === "plan") disc(g, m, m, R, i % 4 === 3 ? ["#fff0e0", "#ff9a5a", "#e8502e", "#7a1f3a"] : ["#eaffff", "#00f0ff", "#0098ff", "#2a3db8"], i % 4 === 3 ? { spots: 0.1, seed: i } : { land: ["#2bd44a", "#7dff3a"], seed: i });
   else if (id === "giant") { const P = [["#fff1d6", "#ffbe5c", "#ff8a00", "#b8325a"], ["#fff6d0", "#ffe08a", "#e0a84a", "#8a5a2a"], ["#e8ffff", "#8af6ff", "#3aa8d8", "#2a4a9a"], ["#e6e0ff", "#9a8aff", "#5b4cff", "#2a1a8a"]][i % 4];
@@ -343,16 +359,45 @@ function sprite(id, i, R) { const key = id + i + ":" + R + ":" + (S.novas % 5); 
   else if (id === "pulsar") disc(g, m, m, R, ["#ffffff", "#eaffff", "#9ff8ff", "#00f0ff"]);
   else if (id === "hole") { ell(R * 1.9, R * 0.5, "#ff8a00", "#ff2e6e", true); disc(g, m, m, R, ["#000000", "#05010f", "#120428", "#ff2ea6"]); ell(R * 1.9, R * 0.5, "#ffe600", "#ff2ea6", false); }
   sprCache.set(key, c); return c; }
-function sunAt(g, cx, cy, R, t) { const P = pal(); cx |= 0; cy |= 0;
+function sunAt(g, cx, cy, R, t) { const P = pal(); if (SM) return sunS(g, cx, cy, R, t, P); cx |= 0; cy |= 0;
   // dotted glow halo + slow rays
   g.fillStyle = P[3]; for (let r = R + 2; r < R + 2 + Math.max(3, R * 0.35); r++) for (let a = 0; a < 6.283; a += 1 / r) { const x = Math.round(cx + Math.cos(a) * r), y = Math.round(cy + Math.sin(a) * r); if (((x + y) & 1) && bay(x, y) < 1 - (r - R) / (R * 0.4 + 3)) g.fillRect(x, y, 1, 1); }
   for (let k = 0; k < 12; k++) { const a = tRot + k * 0.5236, L = R * (1.35 + 0.22 * Math.sin(t * 1.3 + k * 1.7)) + tPulse * R * 0.3; g.fillStyle = k & 1 ? P[1] : P[2]; for (let r = R + 3; r < L; r += 2) g.fillRect(Math.round(cx + Math.cos(a) * r), Math.round(cy + Math.sin(a) * r), 1, 1); }
   disc(g, cx, cy, R, P);
   g.fillStyle = P[0]; const gs = Math.floor(t * 3); for (let k = 0; k < R * 1.5; k++) { const a = hash(k, gs) * 6.283, r = Math.sqrt(hash(k + 99, gs)) * R * 0.85; g.fillRect(Math.round(cx + Math.cos(a) * r), Math.round(cy + Math.sin(a) * r), 1, 1); }
   if (frenzyUntil > now() && ((t * 8) | 0) & 1) { g.fillStyle = "#ff2e6e"; for (let a = 0; a < 6.283; a += 0.6 / R) g.fillRect(Math.round(cx + Math.cos(a) * (R + 1)), Math.round(cy + Math.sin(a) * (R + 1)), 1, 1); } }
-function tStar() { const R = tapMode ? Math.max(14, Math.min(LW * 0.3, LH * 0.21) * (1 + tPulse * 0.06)) | 0 : Math.max(7, Math.round(3.4 * viewK() * (1 + tPulse * 0.05))); return { x: (LW / 2 + (tapMode ? 0 : vPanX + 8)) | 0, y: (LH * (tapMode ? 0.44 : 0.46) + (tapMode ? 0 : vPanY)) | 0, R }; }
+
+/* KING_STARLIFE: every run (and every Supernova) starts as a cloud of matter and debris. Earning stardust pulls it together:
+   debris → protostar (glowing core grows) → a full star. */
+const LIFE0 = 40, LIFE1 = 1500;
+function lifeF() { const t = S.total || 0; if (t >= LIFE1) return 1; if (t < LIFE0) return 0; return Math.log(t / LIFE0) / Math.log(LIFE1 / LIFE0); }
+let lifeStage = -1;
+function lifeAt(g, cx, cy, R, t) { const f = lifeF(), st = f >= 1 ? 2 : (S.total || 0) >= LIFE0 ? 1 : 0;
+  if (lifeStage !== -1 && st > lifeStage) { toast(st === 1 ? "☁️ The cloud is collapsing. A protostar is forming" : "☀️ Your star ignites!"); tRings.push({ x: cx, y: cy, r: R * 0.4, a: 1 }); if (st === 2) for (let i = 0; i < 40; i++) { const a = Math.random() * 6.28, sp = 40 + Math.random() * 120; tParts.push({ x: cx, y: cy, vx: Math.cos(a) * sp, vy: Math.sin(a) * sp, life: 1.3, c: pal()[i % 3], s: 2 }); } }
+  lifeStage = st;
+  if (st === 2) return sunAt(g, cx, cy, R, t);
+  // swirling matter + debris disc, tighter as it collapses; taps pull it in (tPulse)
+  const P = pal(), n = Math.round(R * 9), spin = t * (0.35 + f * 0.9), tight = 1.25 - f * 0.55 - tPulse * 0.08, cols = ["#b9a2ff", "#8a6ad8", "#ff8ad8", "#6f8cff", "#d6c4ff", P[2]];
+  for (let i = 0; i < n; i++) { const u = hash(i, 17), rr = R * tight * (0.12 + Math.pow(u, 0.7) * 1.1), a = i * 2.399 + spin * (1.6 - u) + Math.sin(t * 0.7 + i) * 0.05;
+    const x = Math.round(cx + Math.cos(a) * rr), y = Math.round(cy + Math.sin(a) * rr * 0.62); g.fillStyle = cols[i % cols.length]; fr(g, x, y, hash(i, 23) > 0.86 ? 2 : 1, 1); }
+  // a few chunky rocks
+  for (let i = 0; i < 9; i++) { const a = i * 0.7 + spin * 0.5, rr = R * tight * (0.55 + hash(i, 5) * 0.5); disc(g, cx + Math.cos(a) * rr, cy + Math.sin(a) * rr * 0.62, 1 + (i % 2), ["#e6dcff", "#9a7ce8", "#4b2f8f"]); }
+  if (st === 1) { const cr = Math.max(2, Math.round(R * (0.18 + f * 0.62) * (1 + tPulse * 0.12)));
+    g.fillStyle = P[3]; for (let r = cr + 1; r < cr + 4; r++) for (let a = 0; a < 6.283; a += 1 / r) { const x = Math.round(cx + Math.cos(a) * r), y = Math.round(cy + Math.sin(a) * r); if ((x + y) & 1) fr(g, x, y, 1, 1); }
+    disc(g, cx, cy, cr, f < 0.5 ? ["#ffd0a0", "#ff8a00", "#ff2e6e", "#9b1cff"] : P); }
+  else { const glow = Math.max(1, Math.round(R * 0.12)); disc(g, cx, cy, glow, ["#ffd6ff", "#ff8ad8", "#9b1cff"]); } }
+
+function sunS(g, cx, cy, R, t, P) { const gl = g.createRadialGradient(cx, cy, R * 0.8, cx, cy, R * 2.2); gl.addColorStop(0, P[2] + "aa"); gl.addColorStop(0.45, P[3] + "44"); gl.addColorStop(1, P[3] + "00"); g.fillStyle = gl; g.beginPath(); g.arc(cx, cy, R * 2.2, 0, 6.283); g.fill();
+  g.lineCap = "round"; for (let k = 0; k < 12; k++) { const a = tRot + k * 0.5236, L = R * (1.35 + 0.22 * Math.sin(t * 1.3 + k * 1.7)) + tPulse * R * 0.3, lg = g.createLinearGradient(cx + Math.cos(a) * R, cy + Math.sin(a) * R, cx + Math.cos(a) * L, cy + Math.sin(a) * L);
+    lg.addColorStop(0, (k & 1 ? P[1] : P[2]) + "dd"); lg.addColorStop(1, P[2] + "00"); g.strokeStyle = lg; g.lineWidth = R * 0.07; g.beginPath(); g.moveTo(cx + Math.cos(a) * R * 1.02, cy + Math.sin(a) * R * 1.02); g.lineTo(cx + Math.cos(a) * L, cy + Math.sin(a) * L); g.stroke(); }
+  discS(g, cx, cy, R, P);
+  g.fillStyle = P[0] + "66"; const gs = t * 0.4; for (let k = 0; k < 26; k++) { const a = hash(k, 1) * 6.283 + gs * (0.3 + hash(k, 2)), r = Math.sqrt(hash(k + 99, 3)) * R * 0.8; g.beginPath(); g.arc(cx + Math.cos(a) * r, cy + Math.sin(a) * r, R * (0.012 + hash(k, 5) * 0.022), 0, 6.283); g.fill(); }
+  if (frenzyUntil > now()) { g.strokeStyle = `rgba(255,46,110,${0.5 + 0.4 * Math.sin(t * 8)})`; g.lineWidth = R * 0.05; g.beginPath(); g.arc(cx, cy, R * 1.08, 0, 6.283); g.stroke(); } }
+function tStar() { const R = tapMode ? Math.max(14, Math.min(LW * 0.3, LH * 0.21) * (1 + tPulse * 0.17)) | 0 : Math.max(7, Math.round(3.4 * viewK() * (1 + tPulse * 0.15))); return { x: (LW / 2 + (tapMode ? 0 : vPanX + 8)) | 0, y: (LH * (tapMode ? 0.44 : 0.46) + (tapMode ? 0 : vPanY)) | 0, R }; }
+function sysFar() { let far = 12; for (const g of GENS) if (S.own[g.id]) far = Math.max(far, ORB[g.id][1] + 1.5); return far; }
+function clampPan() { const k = viewK(), hw = sysFar() * k + 2, hh = hw * 0.42 + 4, lx = Math.abs(LW / 2 - 9 - hw), ly = Math.max(3, Math.abs(LH / 2 - 6 - hh)); vPanX = Math.max(-lx, Math.min(lx, vPanX)); vPanY = Math.max(-ly, Math.min(ly, vPanY)); }   // KING_PANCLAMP: your system never leaves the screen
 function viewK() { let far = 12; for (const g of GENS) if (S.own[g.id]) far = Math.max(far, ORB[g.id][1] + 1.5); return vZoom * (Math.min(LW - 18, LH * 2) / 2 - 2) / far; }
-function tapFx(x, y) { tPulse = 1; const P = pal(), st = tStar(); tRings.push({ x: st.x, y: st.y, r: st.R + 1, a: 1 });
+function tapFx(x, y) { tPulse = Math.min(1.6, tPulse + 0.6); const P = pal(), st = tStar(); tRings.push({ x: st.x, y: st.y, r: st.R + 1, a: 1 });
   for (let i = 0; i < 14; i++) { const a = Math.random() * 6.28, sp = 30 + Math.random() * 70; tParts.push({ x: st.x + Math.cos(a) * st.R, y: st.y + Math.sin(a) * st.R, vx: Math.cos(a) * sp, vy: Math.sin(a) * sp, life: 1, c: P[(i % 3)], s: i % 4 ? 1 : 2 }); } }
 function cometFx(x, y, c) { x /= PXS; y /= PXS; for (let i = 0; i < 50; i++) { const a = Math.random() * 6.28, sp = 20 + Math.random() * 110; tParts.push({ x, y, vx: Math.cos(a) * sp, vy: Math.sin(a) * sp, life: 1.3, c: i & 1 ? c : "#ffffff", s: i % 3 ? 1 : 2 }); } tRings.push({ x, y, r: 2, a: 1, c }); }
 // input: Tap = tap anywhere. View = drag to pan, pinch/scroll to zoom, tap the sun or a comet.
@@ -363,7 +408,7 @@ tv.addEventListener("pointerdown", (e) => { e.preventDefault(); lastInput = perf
   try { tv.setPointerCapture(e.pointerId); } catch (er) {} vp.set(e.pointerId, { x: e.clientX, y: e.clientY }); if (vp.size === 1) vDrag = { x: e.clientX, y: e.clientY, px: vPanX, py: vPanY, moved: 0 }; else if (vp.size === 2) { const [p, q] = [...vp.values()]; vPinch = Math.hypot(p.x - q.x, p.y - q.y) / vZoom; vDrag = null; } });
 tv.addEventListener("pointermove", (e) => { if (tapMode || !vp.has(e.pointerId)) return; vp.set(e.pointerId, { x: e.clientX, y: e.clientY });
   if (vp.size === 2 && vPinch) { const [p, q] = [...vp.values()]; vZoom = Math.max(0.6, Math.min(4, Math.hypot(p.x - q.x, p.y - q.y) / vPinch)); return; }
-  if (vDrag) { const dx = e.clientX - vDrag.x, dy = e.clientY - vDrag.y; vDrag.moved = Math.max(vDrag.moved, Math.hypot(dx, dy)); vPanX = vDrag.px + dx / PXS; vPanY = vDrag.py + dy / PXS; } });
+  if (vDrag) { const dx = e.clientX - vDrag.x, dy = e.clientY - vDrag.y; vDrag.moved = Math.max(vDrag.moved, Math.hypot(dx, dy)); vPanX = vDrag.px + dx / PXS; vPanY = vDrag.py + dy / PXS; clampPan(); } });
 const vUp = (e) => { if (tapMode) return; const d = vDrag, was = vp.size; vp.delete(e.pointerId); if (vp.size < 2) vPinch = 0; if (was > 1 || !d) { vDrag = null; return; } vDrag = null;
   if (d.moved > 8) return; const b = tv.getBoundingClientRect(), st = tStar(), x = (e.clientX - b.left) / PXS, y = (e.clientY - b.top) / PXS; if (Math.hypot(x - st.x, y - st.y) <= st.R + 4) tapStar(e.clientX, e.clientY, b); };
 tv.addEventListener("pointerup", vUp); tv.addEventListener("pointercancel", (e) => { vp.delete(e.pointerId); vDrag = null; vPinch = 0; });
@@ -371,13 +416,13 @@ tv.addEventListener("wheel", (e) => { e.preventDefault(); if (!tapMode) vZoom = 
 tv.addEventListener("dblclick", () => { vZoom = 1; vPanX = vPanY = 0; });
 function drawTap(dt, t) {
   if (tv.clientWidth !== Math.round(tW) || tv.clientHeight !== Math.round(tH)) tSize(); if (!LW) return;
-  const g = px; g.imageSmoothingEnabled = false; g.drawImage(bgc, 0, 0);
-  for (const d of tDots) { if (Math.sin(t * d.s + d.p) < -0.35) continue; g.fillStyle = d.c; const yy = (d.y + ((t * d.s * 1.5) | 0)) % LH; g.fillRect(d.x, yy, 1, 1); if (d.big && Math.sin(t * d.s + d.p) > 0.6) { g.fillRect(d.x - 1, yy, 3, 1); g.fillRect(d.x, yy - 1, 1, 3); } }
+  let g; if (SM) { tx.setTransform(1, 0, 0, 1, 0, 0); tx.imageSmoothingEnabled = true; tx.drawImage(bgc, 0, 0); tx.setTransform(PXS * tDpr, 0, 0, PXS * tDpr, 0, 0); g = tx; } else { g = px; g.imageSmoothingEnabled = false; g.drawImage(bgc, 0, 0); }
+  for (const d of tDots) { if (Math.sin(t * d.s + d.p) < -0.35) continue; g.fillStyle = d.c; const yy = (d.y + ((t * d.s * 1.5) | 0)) % LH; fr(g, d.x, yy, 1, 1); if (d.big && Math.sin(t * d.s + d.p) > 0.6) { fr(g, d.x - 1, yy, 3, 1); fr(g, d.x, yy - 1, 1, 3); } }
   tPulse *= Math.pow(0.02, dt); tRot += dt * 0.12; const st = tStar();
-  if (tapMode) sunAt(g, st.x, st.y, st.R, t);
-  else { const k = viewK(), tilt = 0.42, P = pal();
+  if (tapMode) lifeAt(g, st.x, st.y, st.R, t);
+  else { clampPan(); const k = viewK(), tilt = 0.42, P = pal();
     // orbit lanes
-    g.fillStyle = "rgba(255,255,255,.22)"; for (const id of Object.keys(ORB)) { if (!S.own[id]) continue; const r = (ORB[id][0] + ORB[id][1]) / 2 * k; for (let a = 0; a < 6.283; a += 3 / Math.max(r, 6)) g.fillRect(Math.round(st.x + Math.cos(a) * r), Math.round(st.y + Math.sin(a) * r * tilt), 1, 1); }
+    g.fillStyle = "rgba(255,255,255,.22)"; for (const id of Object.keys(ORB)) { if (!S.own[id]) continue; const r = (ORB[id][0] + ORB[id][1]) / 2 * k; for (let a = 0; a < 6.283; a += 3 / Math.max(r, 6)) fr(g, Math.round(st.x + Math.cos(a) * r), Math.round(st.y + Math.sin(a) * r * tilt), 1, 1); }
     const items = []; const pt = (r, a) => ({ x: st.x + Math.cos(a) * r * k, y: st.y + Math.sin(a) * r * k * tilt, back: Math.sin(a) < 0 });
     const nM = Math.min(70, (S.own.mote || 0) * 3), nR = Math.min(180, (S.own.rock || 0) * 6), nD = Math.min(80, (S.own.dyson || 0) * 6);
     for (let i = 0; i < nM; i++) items.push({ ...pt(ORB.mote[0] + hash(i, 1) * 1.4, i * 2.399 + t * 0.35), dot: i % 3 ? "#ffe600" : "#ffffff" });
@@ -385,23 +430,23 @@ function drawTap(dt, t) {
     for (let i = 0; i < nD; i++) items.push({ ...pt(ORB.dyson[0] + hash(i, 6) * 1.2, i * 2.399 + t * 0.6), dot: (i + ((t * 4) | 0)) % 5 ? "#00f0ff" : "#ffffff" });
     const SZ = { moon: 0.6, plan: 1.05, giant: 1.9, ring: 1.2, pulsar: 0.6, hole: 1.1 }, MINR = { moon: 2, plan: 3, giant: 4, ring: 3, pulsar: 2, hole: 3 };
     for (const id in bodies) bodies[id].forEach((o, i) => { const p = pt(o.r, o.a); items.push({ ...p, spr: sprite(id, i, Math.max(MINR[id], Math.round(SZ[id] * k))), id }); });
-    const drawIt = (it) => { if (it.dot) { g.fillStyle = it.dot; g.fillRect(it.x | 0, it.y | 0, it.s || 1, it.s || 1); return; } g.drawImage(it.spr, Math.round(it.x - it.spr.width / 2), Math.round(it.y - it.spr.height / 2));
-      if (it.id === "pulsar") { g.fillStyle = "#9ff8ff"; const a = t * 3; for (let r = 3; r < 14; r += 1) { g.fillRect(Math.round(it.x + Math.cos(a) * r), Math.round(it.y + Math.sin(a) * r * 0.6), 1, 1); g.fillRect(Math.round(it.x - Math.cos(a) * r), Math.round(it.y - Math.sin(a) * r * 0.6), 1, 1); } } };
-    items.sort((a, b) => a.y - b.y); items.filter((i) => i.back).forEach(drawIt); sunAt(g, st.x, st.y, st.R, t); items.filter((i) => !i.back).forEach(drawIt); }
+    const drawIt = (it) => { if (it.dot) { g.fillStyle = it.dot; fr(g, it.x | 0, it.y | 0, it.s || 1, it.s || 1); return; } { const sc = it.spr.sc || 1, w = it.spr.width / sc; g.drawImage(it.spr, SM ? it.x - w / 2 : Math.round(it.x - w / 2), SM ? it.y - w / 2 : Math.round(it.y - w / 2), w, w); }
+      if (it.id === "pulsar") { g.fillStyle = "#9ff8ff"; const a = t * 3; for (let r = 3; r < 14; r += 1) { fr(g, Math.round(it.x + Math.cos(a) * r), Math.round(it.y + Math.sin(a) * r * 0.6), 1, 1); fr(g, Math.round(it.x - Math.cos(a) * r), Math.round(it.y - Math.sin(a) * r * 0.6), 1, 1); } } };
+    items.sort((a, b) => a.y - b.y); items.filter((i) => i.back).forEach(drawIt); lifeAt(g, st.x, st.y, st.R, t); items.filter((i) => !i.back).forEach(drawIt); }
   // rings + sparks
-  tRings = tRings.filter((r) => (r.r += dt * 60, r.a -= dt * 1.6) > 0); for (const r of tRings) { g.fillStyle = r.c || pal()[1]; for (let a = 0; a < 6.283; a += 1.2 / r.r) if (bay(Math.round(a * 20), 0) < r.a) g.fillRect(Math.round(r.x + Math.cos(a) * r.r), Math.round(r.y + Math.sin(a) * r.r), 1, 1); }
-  tParts = tParts.filter((p) => (p.life -= dt * 1.5) > 0).slice(-400); for (const p of tParts) { p.x += p.vx * dt; p.y += p.vy * dt; p.vx *= 0.95; p.vy *= 0.95; if (p.life < 0.3 && ((t * 20) | 0) & 1) continue; g.fillStyle = p.c; g.fillRect(p.x | 0, p.y | 0, p.s, p.s); }
+  tRings = tRings.filter((r) => (r.r += dt * 60, r.a -= dt * 1.6) > 0); for (const r of tRings) { g.fillStyle = r.c || pal()[1]; for (let a = 0; a < 6.283; a += 1.2 / r.r) if (bay(Math.round(a * 20), 0) < r.a) fr(g, Math.round(r.x + Math.cos(a) * r.r), Math.round(r.y + Math.sin(a) * r.r), 1, 1); }
+  tParts = tParts.filter((p) => (p.life -= dt * 1.5) > 0).slice(-400); for (const p of tParts) { p.x += p.vx * dt; p.y += p.vy * dt; p.vx *= 0.95; p.vy *= 0.95; if (p.life < 0.3 && ((t * 20) | 0) & 1) continue; g.fillStyle = p.c; fr(g, p.x | 0, p.y | 0, p.s, p.s); }
   // comet streaks across while the game's comet is out (screen px kept in tc.x/tc.y for taps)
   if (comet && !tc) { const fromL = Math.random() < 0.5, up = Math.random() < 0.5, y0 = LH * (up ? 0.12 + Math.random() * 0.08 : 0.68 + Math.random() * 0.08); tc = { x0: fromL ? -10 : LW + 10, y0, x1: fromL ? LW + 10 : -10, y1: y0 + LH * (Math.random() * 0.12 - 0.06), k: 0, hist: [] }; }
   if (tc && tc.x0 !== undefined) { tc.k += dt / 6.5; const e = tc.k, lx = tc.x0 + (tc.x1 - tc.x0) * e, ly = tc.y0 + (tc.y1 - tc.y0) * e + Math.sin(e * 3.14) * (tc.y0 < LH / 2 ? 8 : -8); tc.x = lx * PXS; tc.y = ly * PXS; tc.hist.unshift([lx | 0, ly | 0]); if (tc.hist.length > 26) tc.hist.pop();
-    const TR = ["#ffffff", "#fff59a", "#ffe600", "#ff8a00", "#ff2ea6", "#b86bff"]; tc.hist.forEach(([hx, hy], i) => { if (i > 10 && (i + ((t * 12) | 0)) & 1) return; g.fillStyle = TR[Math.min(TR.length - 1, (i / 4) | 0)]; const s = i < 4 ? 2 : 1; g.fillRect(hx, hy, s, s); });
-    g.fillStyle = "#ffffff"; g.fillRect((lx | 0) - 1, (ly | 0) - 1, 3, 3); g.fillStyle = "#9ff8ff"; g.fillRect((lx | 0) - 2, ly | 0, 1, 1); g.fillRect((lx | 0) + 2, ly | 0, 1, 1); g.fillRect(lx | 0, (ly | 0) - 2, 1, 1); g.fillRect(lx | 0, (ly | 0) + 2, 1, 1);
+    const TR = ["#ffffff", "#fff59a", "#ffe600", "#ff8a00", "#ff2ea6", "#b86bff"]; tc.hist.forEach(([hx, hy], i) => { if (i > 10 && (i + ((t * 12) | 0)) & 1) return; g.fillStyle = TR[Math.min(TR.length - 1, (i / 4) | 0)]; const s = i < 4 ? 2 : 1; fr(g, hx, hy, s, s); });
+    g.fillStyle = "#ffffff"; fr(g, (lx | 0) - 1, (ly | 0) - 1, 3, 3); g.fillStyle = "#9ff8ff"; fr(g, (lx | 0) - 2, ly | 0, 1, 1); fr(g, (lx | 0) + 2, ly | 0, 1, 1); fr(g, lx | 0, (ly | 0) - 2, 1, 1); fr(g, lx | 0, (ly | 0) + 2, 1, 1);
     if (e >= 1) { tc = null; if (comet) endComet(); } }
-  tx.setTransform(1, 0, 0, 1, 0, 0); tx.imageSmoothingEnabled = false; tx.drawImage(pc, 0, 0, LW * PXS * tDpr, LH * PXS * tDpr);
+  if (!SM) { tx.setTransform(1, 0, 0, 1, 0, 0); tx.imageSmoothingEnabled = false; tx.drawImage(pc, 0, 0, LW * PXS * tDpr, LH * PXS * tDpr); }
 }
 // pixel icons for the shop, drawn by the same sprite code
-function pixIcons() { const css = []; const one = (id, draw) => { const c = document.createElement("canvas"); c.width = c.height = 24; const g = c.getContext("2d"); draw(g); css.push(`.ico-${id}{background-image:url(${c.toDataURL()})!important}`); };
-  const put = (spr) => (g) => g.drawImage(spr, Math.round(12 - spr.width / 2), Math.round(12 - spr.height / 2));
+function pixIcons() { const css = []; const one = (id, draw) => { const c = document.createElement("canvas"), k = SM ? 3 : 1; c.width = c.height = 24 * k; const g = c.getContext("2d"); g.scale(k, k); draw(g); css.push(`.ico-${id}{background-image:url(${c.toDataURL()})!important}`); };
+  const put = (spr) => (g) => { const w = spr.width / (spr.sc || 1); g.drawImage(spr, 12 - w / 2, 12 - w / 2, w, w); };
   one("mote", (g) => { [[12, 12, "#ffffff", 2], [6, 8, "#ffe600", 1], [17, 6, "#ffe600", 1], [18, 16, "#ffffff", 1], [7, 17, "#ff2ea6", 1], [12, 4, "#00f0ff", 1]].forEach(([x, y, c, s]) => { g.fillStyle = c; g.fillRect(x, y, s, s); }); });
   one("rock", (g) => { disc(g, 10, 12, 5, ["#e6dcff", "#b9a2ff", "#8a6ad8", "#4b2f8f"], { spots: 0.15, seed: 3 }); disc(g, 18, 7, 2, ["#ffd0f0", "#ff8ad8", "#b8325a"]); disc(g, 18, 17, 1, ["#ffd0f0", "#ff8ad8"]); });
   ["moon", "plan", "giant", "ring", "hole", "pulsar"].forEach((id) => one(id, put(sprite(id, 0, { moon: 7, plan: 8, giant: 5, ring: 6, hole: 4, pulsar: 4 }[id]))));
