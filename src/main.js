@@ -343,9 +343,9 @@ function disc(g, cx, cy, R, P, opt = {}) { if (SM) return discS(g, cx, cy, R, P,
 
 function discS(g, cx, cy, R, P, opt = {}) { if (R <= 0) return; g.save(); g.beginPath(); g.arc(cx, cy, R, 0, 6.283); g.clip();
   const rg = g.createRadialGradient(cx - R * 0.38, cy - R * 0.38, R * 0.05, cx, cy, R * 1.05); P.forEach((c, i) => rg.addColorStop(i / (P.length - 1), c)); g.fillStyle = rg; g.fillRect(cx - R, cy - R, R * 2, R * 2);
-  if (opt.bands) { g.globalAlpha = 0.35; for (let k = -R; k < R; k += R / 4.5) { g.fillStyle = (Math.round(k / (R / 4.5)) + (opt.ph | 0)) & 1 ? P[0] : P[P.length - 1]; g.fillRect(cx - R, cy + k, R * 2, R / 9 + Math.sin(k + opt.ph) * R / 30); } g.globalAlpha = 1; }
+  if (opt.bands) { g.globalAlpha = 0.16; for (let k = -R; k < R; k += R / 4.5) { g.fillStyle = (Math.round(k / (R / 4.5)) + (opt.ph | 0)) & 1 ? P[0] : P[P.length - 1]; g.fillRect(cx - R, cy + k, R * 2, R / 9 + Math.sin(k + opt.ph) * R / 30); } g.globalAlpha = 1; }
   if (opt.land) { g.fillStyle = opt.land[1]; for (let k = 0; k < 5; k++) { const a = hash(k, opt.seed | 0) * 6.28, d = hash(k + 9, opt.seed | 0) * R * 0.7; g.beginPath(); g.ellipse(cx + Math.cos(a) * d, cy + Math.sin(a) * d, R * (0.18 + hash(k, 4) * 0.2), R * (0.12 + hash(k, 6) * 0.14), a, 0, 6.283); g.fill(); } }
-  if (opt.spots) { g.fillStyle = "rgba(0,0,0,.18)"; for (let k = 0; k < 6; k++) { const a = hash(k, (opt.seed | 0) + 3) * 6.28, d = hash(k + 2, (opt.seed | 0) + 5) * R * 0.75; g.beginPath(); g.arc(cx + Math.cos(a) * d, cy + Math.sin(a) * d, R * (0.08 + hash(k, 8) * 0.12), 0, 6.283); g.fill(); } }
+  if (opt.spots) { g.fillStyle = "rgba(0,0,0,.1)"; for (let k = 0; k < 6; k++) { const a = hash(k, (opt.seed | 0) + 3) * 6.28, d = hash(k + 2, (opt.seed | 0) + 5) * R * 0.75; g.beginPath(); g.arc(cx + Math.cos(a) * d, cy + Math.sin(a) * d, R * (0.08 + hash(k, 8) * 0.12), 0, 6.283); g.fill(); } }
   const sh = g.createRadialGradient(cx - R * 0.3, cy - R * 0.3, R * 0.6, cx, cy, R * 1.02); sh.addColorStop(0, "rgba(0,0,0,0)"); sh.addColorStop(1, "rgba(10,0,40,.35)"); g.fillStyle = sh; g.fillRect(cx - R, cy - R, R * 2, R * 2); g.restore(); }
 const sprCache = new Map();
 function sprite(id, i, R) { const key = id + i + ":" + R + ":" + (S.novas % 5) + (SM ? "s" + PXS * tDpr : ""); let c = sprCache.get(key); if (c) return c; if (sprCache.size > 300) sprCache.clear();
@@ -359,7 +359,7 @@ function sprite(id, i, R) { const key = id + i + ":" + R + ":" + (S.novas % 5) +
   else if (id === "pulsar") disc(g, m, m, R, ["#ffffff", "#eaffff", "#9ff8ff", "#00f0ff"]);
   else if (id === "hole") { ell(R * 1.9, R * 0.5, "#ff8a00", "#ff2e6e", true); disc(g, m, m, R, ["#000000", "#05010f", "#120428", "#ff2ea6"]); ell(R * 1.9, R * 0.5, "#ffe600", "#ff2ea6", false); }
   sprCache.set(key, c); return c; }
-function sunAt(g, cx, cy, R, t) { const P = pal(); if (SM) return sunS(g, cx, cy, R, t, P); cx |= 0; cy |= 0;
+function sunAt(g, cx, cy, R, t, P0) { const P = P0 || pal(); if (SM) return sunS(g, cx, cy, R, t, P); cx |= 0; cy |= 0;
   // dotted glow halo + slow rays
   g.fillStyle = P[3]; for (let r = R + 2; r < R + 2 + Math.max(3, R * 0.35); r++) for (let a = 0; a < 6.283; a += 1 / r) { const x = Math.round(cx + Math.cos(a) * r), y = Math.round(cy + Math.sin(a) * r); if (((x + y) & 1) && bay(x, y) < 1 - (r - R) / (R * 0.4 + 3)) g.fillRect(x, y, 1, 1); }
   for (let k = 0; k < 12; k++) { const a = tRot + k * 0.5236, L = R * (1.35 + 0.22 * Math.sin(t * 1.3 + k * 1.7)) + tPulse * R * 0.3; g.fillStyle = k & 1 ? P[1] : P[2]; for (let r = R + 3; r < L; r += 2) g.fillRect(Math.round(cx + Math.cos(a) * r), Math.round(cy + Math.sin(a) * r), 1, 1); }
@@ -367,33 +367,53 @@ function sunAt(g, cx, cy, R, t) { const P = pal(); if (SM) return sunS(g, cx, cy
   g.fillStyle = P[0]; const gs = Math.floor(t * 3); for (let k = 0; k < R * 1.5; k++) { const a = hash(k, gs) * 6.283, r = Math.sqrt(hash(k + 99, gs)) * R * 0.85; g.fillRect(Math.round(cx + Math.cos(a) * r), Math.round(cy + Math.sin(a) * r), 1, 1); }
   if (frenzyUntil > now() && ((t * 8) | 0) & 1) { g.fillStyle = "#ff2e6e"; for (let a = 0; a < 6.283; a += 0.6 / R) g.fillRect(Math.round(cx + Math.cos(a) * (R + 1)), Math.round(cy + Math.sin(a) * (R + 1)), 1, 1); } }
 
-/* KING_STARLIFE: every run (and every Supernova) starts as a cloud of matter and debris. Earning stardust pulls it together:
-   debris → protostar (glowing core grows) → a full star. */
-const LIFE0 = 40, LIFE1 = 1500;
-function lifeF() { const t = S.total || 0; if (t >= LIFE1) return 1; if (t < LIFE0) return 0; return Math.log(t / LIFE0) / Math.log(LIFE1 / LIFE0); }
+/* KING_STARLIFE2 (King, Nov 15): every run lives the whole life of a massive star, driven by stardust earned this run (S.total):
+   molecular cloud → protostar → T Tauri → main sequence → subgiant → red giant → yellow supergiant → red supergiant → core collapse (Supernova ready). */
+const STAGES = [
+  { at: 0, n: "Molecular cloud", e: "☁️", f: 1 }, { at: 40, n: "Protostar", e: "🌑", f: 1 }, { at: 600, n: "T Tauri star", e: "🌟", f: 0.8 },
+  { at: 1e4, n: "Main sequence", e: "☀️", f: 1 }, { at: 1e6, n: "Subgiant", e: "🟠", f: 1.15, P: ["#fff3c8", "#ffd060", "#ff8a3c", "#e0405a"] },
+  { at: 2e7, n: "Red giant", e: "🔴", f: 1.35, P: ["#ffd8b0", "#ff8a4a", "#ff4a3c", "#a01a5a"] }, { at: 2e8, n: "Yellow supergiant", e: "🌕", f: 1.5, P: ["#ffffff", "#fff59a", "#ffd23c", "#ff8a00"] },
+  { at: 6e8, n: "Red supergiant", e: "❤️‍🔥", f: 1.72, P: ["#ffc8a0", "#ff6a3a", "#e8203c", "#7a0a4a"] }, { at: 1e9, n: "Core collapse", e: "💥", f: 1.75, P: ["#ffc8a0", "#ff6a3a", "#e8203c", "#7a0a4a"] }];
+function stageOf() { const t = S.total || 0; let i = 0; while (i < STAGES.length - 1 && t >= STAGES[i + 1].at) i++; return i; }
+function stageK(i) { const a = STAGES[i].at, b = i < STAGES.length - 1 ? STAGES[i + 1].at : a * 2, t = S.total || 0; return a <= 0 ? Math.min(1, t / b) : Math.max(0, Math.min(1, Math.log(Math.max(t, a) / a) / Math.log(b / a))); }
+const LIFE0 = 40; function lifeF() { return stageOf() >= 3 ? 1 : (S.total || 0) < LIFE0 ? 0 : stageK(1) * 0.5 + (stageOf() >= 2 ? 0.5 : 0); }
 let lifeStage = -1;
-function lifeAt(g, cx, cy, R, t) { const f = lifeF(), st = f >= 1 ? 2 : (S.total || 0) >= LIFE0 ? 1 : 0;
-  if (lifeStage !== -1 && st > lifeStage) { toast(st === 1 ? "☁️ The cloud is collapsing. A protostar is forming" : "☀️ Your star ignites!"); tRings.push({ x: cx, y: cy, r: R * 0.4, a: 1 }); if (st === 2) for (let i = 0; i < 40; i++) { const a = Math.random() * 6.28, sp = 40 + Math.random() * 120; tParts.push({ x: cx, y: cy, vx: Math.cos(a) * sp, vy: Math.sin(a) * sp, life: 1.3, c: pal()[i % 3], s: 2 }); } }
-  lifeStage = st;
-  if (st === 2) return sunAt(g, cx, cy, R, t);
-  // swirling matter + debris disc, tighter as it collapses; taps pull it in (tPulse)
-  const P = pal(), n = Math.round(R * 9), spin = t * (0.35 + f * 0.9), tight = 1.25 - f * 0.55 - tPulse * 0.08, cols = ["#b9a2ff", "#8a6ad8", "#ff8ad8", "#6f8cff", "#d6c4ff", P[2]];
+const stLbl = document.createElement("span"); stLbl.className = "pill"; stLbl.id = "stagelbl"; try { document.querySelector(".rates").appendChild(stLbl); } catch (e) {}
+function lifeSize() { const i = stageOf(), A = STAGES[i], B = STAGES[Math.min(i + 1, STAGES.length - 1)]; return A.f + (B.f - A.f) * stageK(i) * (i >= 3 && i < 8 ? 0.6 : 0); }
+function dustCloud(g, cx, cy, R, t, f) { const P = pal(), n = Math.round(R * 9), spin = t * (0.35 + f * 0.9), tight = 1.25 - f * 0.55 - tPulse * 0.08, cols = ["#b9a2ff", "#8a6ad8", "#ff8ad8", "#6f8cff", "#d6c4ff", P[2]];
   for (let i = 0; i < n; i++) { const u = hash(i, 17), rr = R * tight * (0.12 + Math.pow(u, 0.7) * 1.1), a = i * 2.399 + spin * (1.6 - u) + Math.sin(t * 0.7 + i) * 0.05;
-    const x = Math.round(cx + Math.cos(a) * rr), y = Math.round(cy + Math.sin(a) * rr * 0.62); g.fillStyle = cols[i % cols.length]; fr(g, x, y, hash(i, 23) > 0.86 ? 2 : 1, 1); }
-  // a few chunky rocks
-  for (let i = 0; i < 9; i++) { const a = i * 0.7 + spin * 0.5, rr = R * tight * (0.55 + hash(i, 5) * 0.5); disc(g, cx + Math.cos(a) * rr, cy + Math.sin(a) * rr * 0.62, 1 + (i % 2), ["#e6dcff", "#9a7ce8", "#4b2f8f"]); }
-  if (st === 1) { const cr = Math.max(2, Math.round(R * (0.18 + f * 0.62) * (1 + tPulse * 0.12)));
-    g.fillStyle = P[3]; for (let r = cr + 1; r < cr + 4; r++) for (let a = 0; a < 6.283; a += 1 / r) { const x = Math.round(cx + Math.cos(a) * r), y = Math.round(cy + Math.sin(a) * r); if ((x + y) & 1) fr(g, x, y, 1, 1); }
-    disc(g, cx, cy, cr, f < 0.5 ? ["#ffd0a0", "#ff8a00", "#ff2e6e", "#9b1cff"] : P); }
-  else { const glow = Math.max(1, Math.round(R * 0.12)); disc(g, cx, cy, glow, ["#ffd6ff", "#ff8ad8", "#9b1cff"]); } }
+    g.fillStyle = cols[i % cols.length]; fr(g, cx + Math.cos(a) * rr, cy + Math.sin(a) * rr * 0.62, hash(i, 23) > 0.86 ? 2 : 1, 1); }
+  for (let i = 0; i < 9; i++) { const a = i * 0.7 + spin * 0.5, rr = R * tight * (0.55 + hash(i, 5) * 0.5); disc(g, cx + Math.cos(a) * rr, cy + Math.sin(a) * rr * 0.62, 1 + (i % 2), ["#e6dcff", "#9a7ce8", "#4b2f8f"]); } }
+function lifeAt(g, cx, cy, R, t) { const st = stageOf(), S0 = STAGES[st], k = stageK(st);
+  if (lifeStage !== st) { if (lifeStage !== -1 && st > lifeStage) { toast(`${S0.e} Your star is now a ${S0.n.toLowerCase()}`); tRings.push({ x: cx, y: cy, r: R * 0.5, a: 1 }); for (let i = 0; i < 30; i++) { const a = Math.random() * 6.28, sp = 40 + Math.random() * 110; tParts.push({ x: cx, y: cy, vx: Math.cos(a) * sp, vy: Math.sin(a) * sp, life: 1.2, c: (S0.P || pal())[i % 3], s: 2 }); } }
+    lifeStage = st; stLbl.textContent = S0.e + " " + S0.n; stLbl.title = "Your star's life stage. Earn stardust to age it; Supernova unlocks at core collapse."; }
+  if (st === 0) { dustCloud(g, cx, cy, R, t, k * 0.4);
+    if (S.novas > 0) { g.fillStyle = "#9ff8ff"; fr(g, cx - 1, cy - 1, 2, 2); const a = t * 4; g.fillStyle = "#00f0ff"; for (let r = 2; r < 6; r++) { fr(g, cx + Math.cos(a) * r, cy + Math.sin(a) * r * 0.5, 1, 1); fr(g, cx - Math.cos(a) * r, cy - Math.sin(a) * r * 0.5, 1, 1); } }   // the neutron star left by your last Supernova
+    else disc(g, cx, cy, Math.max(1, Math.round(R * 0.12)), ["#ffd6ff", "#ff8ad8", "#9b1cff"]); return; }
+  if (st === 1) { dustCloud(g, cx, cy, R, t, 0.4 + k * 0.4); const cr = Math.max(2, Math.round(R * (0.18 + k * 0.35) * (1 + tPulse * 0.12)));
+    g.fillStyle = "#ff2e6e"; for (let r = cr + 1; r < cr + 4; r++) for (let a = 0; a < 6.283; a += 1 / r) { const x = Math.round(cx + Math.cos(a) * r), y = Math.round(cy + Math.sin(a) * r); if ((x + y) & 1) fr(g, x, y, 1, 1); }
+    disc(g, cx, cy, cr, ["#ffd0a0", "#ff8a00", "#ff2e6e", "#9b1cff"]); return; }
+  if (st === 2) { // T Tauri: young star, dusty disc, jets out both poles, flickers
+    const r0 = Math.round(R * (0.55 + k * 0.25) * (1 + tPulse * 0.12)), fl = 0.85 + 0.15 * Math.sin(t * 9) * Math.sin(t * 3.7);
+    g.fillStyle = "#b9a2ff"; for (let i = 0; i < R * 5; i++) { const a = i * 2.399 + t * 0.5, rr = r0 * (1.3 + hash(i, 3) * 0.9); fr(g, cx + Math.cos(a) * rr, cy + Math.sin(a) * rr * 0.22, 1, 1); }
+    for (const d of [-1, 1]) for (let j = 0; j < R * 1.2; j++) { const y = cy + d * (r0 + j), w = Math.sin(j * 0.4 - t * 10) * (1 + j * 0.04); g.fillStyle = j % 3 ? "#9ff8ff" : "#00f0ff"; if (hash(j, (t * 20) | 0) > 0.25) fr(g, cx + w, y, 1, 1); }
+    sunAt(g, cx, cy, Math.round(r0 * fl), t, ["#fff6e0", "#ffd060", "#ff8a00", "#ff2e6e"]); return; }
+  const P = S0.P || pal(); let r = R;
+  if (st >= 7) { r = Math.round(R * (1 + 0.04 * Math.sin(t * 2.2)));   // red supergiant pulses and sheds shells
+    for (let q = 0; q < 3; q++) { const sr = r * (1.15 + ((t * 0.12 + q / 3) % 1) * 0.9), al = 1 - ((t * 0.12 + q / 3) % 1); if (SM) { g.strokeStyle = P[2] + Math.round(al * 90).toString(16).padStart(2, "0"); g.lineWidth = Math.max(0.6, r * 0.03); g.beginPath(); g.arc(cx, cy, sr, 0, 6.283); g.stroke(); continue; } g.fillStyle = P[2]; for (let a = 0; a < 6.283; a += 2 / sr) if (hash(Math.round(a * 30), q) < al * 0.6) fr(g, cx + Math.cos(a) * sr, cy + Math.sin(a) * sr, 1, 1); } }
+  sunAt(g, cx, cy, r, t, P);
+  if (st >= 5 && !SM) { g.fillStyle = P[3]; for (let i = 0; i < r * 1.2; i++) { const a = hash(i, (t * 0.6) | 0) * 6.283, rr = Math.sqrt(hash(i + 50, (t * 0.6) | 0)) * r * 0.85; fr(g, cx + Math.cos(a) * rr, cy + Math.sin(a) * rr, 2, 2); } }   // giant convection cells
+  if (st === 8 && ((t * 6) | 0) % 3 === 0) disc(g, cx, cy, Math.max(2, Math.round(r * 0.28)), ["#ffffff", "#e6f6ff", "#9ff8ff"]);   // core about to collapse
+}
 
-function sunS(g, cx, cy, R, t, P) { const gl = g.createRadialGradient(cx, cy, R * 0.8, cx, cy, R * 2.2); gl.addColorStop(0, P[2] + "aa"); gl.addColorStop(0.45, P[3] + "44"); gl.addColorStop(1, P[3] + "00"); g.fillStyle = gl; g.beginPath(); g.arc(cx, cy, R * 2.2, 0, 6.283); g.fill();
-  g.lineCap = "round"; for (let k = 0; k < 12; k++) { const a = tRot + k * 0.5236, L = R * (1.35 + 0.22 * Math.sin(t * 1.3 + k * 1.7)) + tPulse * R * 0.3, lg = g.createLinearGradient(cx + Math.cos(a) * R, cy + Math.sin(a) * R, cx + Math.cos(a) * L, cy + Math.sin(a) * L);
-    lg.addColorStop(0, (k & 1 ? P[1] : P[2]) + "dd"); lg.addColorStop(1, P[2] + "00"); g.strokeStyle = lg; g.lineWidth = R * 0.07; g.beginPath(); g.moveTo(cx + Math.cos(a) * R * 1.02, cy + Math.sin(a) * R * 1.02); g.lineTo(cx + Math.cos(a) * L, cy + Math.sin(a) * L); g.stroke(); }
-  discS(g, cx, cy, R, P);
-  g.fillStyle = P[0] + "66"; const gs = t * 0.4; for (let k = 0; k < 26; k++) { const a = hash(k, 1) * 6.283 + gs * (0.3 + hash(k, 2)), r = Math.sqrt(hash(k + 99, 3)) * R * 0.8; g.beginPath(); g.arc(cx + Math.cos(a) * r, cy + Math.sin(a) * r, R * (0.012 + hash(k, 5) * 0.022), 0, 6.283); g.fill(); }
-  if (frenzyUntil > now()) { g.strokeStyle = `rgba(255,46,110,${0.5 + 0.4 * Math.sin(t * 8)})`; g.lineWidth = R * 0.05; g.beginPath(); g.arc(cx, cy, R * 1.08, 0, 6.283); g.stroke(); } }
-function tStar() { const R = tapMode ? Math.max(14, Math.min(LW * 0.3, LH * 0.21) * (1 + tPulse * 0.17)) | 0 : Math.max(7, Math.round(3.4 * viewK() * (1 + tPulse * 0.15))); return { x: (LW / 2 + (tapMode ? 0 : vPanX + 8)) | 0, y: (LH * (tapMode ? 0.44 : 0.46) + (tapMode ? 0 : vPanY)) | 0, R }; }
+// KING_SMOOTHCLEAN: Smooth look = clean glowing sphere, soft halo, nothing busy
+function sunS(g, cx, cy, R, t, P) {
+  const gl = g.createRadialGradient(cx, cy, R * 0.9, cx, cy, R * 2.6); gl.addColorStop(0, P[1] + "66"); gl.addColorStop(0.35, P[2] + "26"); gl.addColorStop(1, P[2] + "00"); g.fillStyle = gl; g.beginPath(); g.arc(cx, cy, R * 2.6, 0, 6.283); g.fill();
+  const co = g.createRadialGradient(cx, cy, R * 0.98, cx, cy, R * 1.22); co.addColorStop(0, P[1] + "aa"); co.addColorStop(1, P[1] + "00"); g.fillStyle = co; g.beginPath(); g.arc(cx, cy, R * 1.22, 0, 6.283); g.fill();
+  const b = g.createRadialGradient(cx - R * 0.3, cy - R * 0.32, R * 0.08, cx, cy, R); b.addColorStop(0, "#ffffff"); b.addColorStop(0.18, P[0]); b.addColorStop(0.62, P[1]); b.addColorStop(0.92, P[2]); b.addColorStop(1, P[3]);
+  g.fillStyle = b; g.beginPath(); g.arc(cx, cy, R, 0, 6.283); g.fill();
+  if (frenzyUntil > now()) { g.strokeStyle = `rgba(255,46,110,${0.45 + 0.35 * Math.sin(t * 8)})`; g.lineWidth = Math.max(0.6, R * 0.04); g.beginPath(); g.arc(cx, cy, R * 1.1, 0, 6.283); g.stroke(); } }
+function tStar() { const L = stageOf() >= 3 ? lifeSize() : 1, R = tapMode ? Math.max(12, Math.min(LW * 0.21, LH * 0.15) * L * (1 + tPulse * 0.17)) | 0 : Math.max(6, Math.round(2.9 * viewK() * L * (1 + tPulse * 0.15))); return { x: (LW / 2 + (tapMode ? 0 : vPanX + 8)) | 0, y: (LH * (tapMode ? 0.44 : 0.46) + (tapMode ? 0 : vPanY)) | 0, R }; }
 function sysFar() { let far = 12; for (const g of GENS) if (S.own[g.id]) far = Math.max(far, ORB[g.id][1] + 1.5); return far; }
 function clampPan() { const k = viewK(), hw = sysFar() * k + 2, hh = hw * 0.42 + 4, lx = Math.abs(LW / 2 - 9 - hw), ly = Math.max(3, Math.abs(LH / 2 - 6 - hh)); vPanX = Math.max(-lx, Math.min(lx, vPanX)); vPanY = Math.max(-ly, Math.min(ly, vPanY)); }   // KING_PANCLAMP: your system never leaves the screen
 function viewK() { let far = 12; for (const g of GENS) if (S.own[g.id]) far = Math.max(far, ORB[g.id][1] + 1.5); return vZoom * (Math.min(LW - 18, LH * 2) / 2 - 2) / far; }
