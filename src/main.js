@@ -34,26 +34,43 @@ const ACH = [
   ["nova", "Supernova", (s) => s.novas >= 1], ["nova5", "Serial supernova", (s) => s.novas >= 5], ["fifty", "Crowded sky", (s) => GENS.reduce((a, g) => a + (s.own[g.id] || 0), 0) >= 50],
 ];
 const KEY = "kairos.orbit.v2";
-const fresh = (hard, S0) => Object.assign({ dust: 0, total: 0, own: {}, ups: {}, t: now(), sound: true }, hard ? { shards: 0, novas: 0, ach: {}, taps: 0, comets: 0, born: now(), allTime: 0 } : { shards: S0.shards, novas: S0.novas, ach: S0.ach, taps: S0.taps, comets: S0.comets, born: S0.born, allTime: S0.allTime });
+const fresh = (hard, S0) => Object.assign({ dust: 0, total: 0, own: {}, ups: {}, t: now(), sound: true }, hard ? { shards: 0, life: 0, shop: {}, novas: 0, ach: {}, taps: 0, comets: 0, born: now(), allTime: 0 } : { shards: S0.shards, life: S0.life, shop: S0.shop, novas: S0.novas, ach: S0.ach, taps: S0.taps, comets: S0.comets, born: S0.born, allTime: S0.allTime });
 let S = fresh(true);
 try { const raw = localStorage.getItem(KEY) || localStorage.getItem("kairos.orbit.v1"); if (raw) S = Object.assign(fresh(true), JSON.parse(raw)); } catch (e) {}
+/* KING_SHARDSHOP (King, Nov 17): life = shards ever earned (sets the Supernova goal), shop = shard upgrades bought */
+if (!(S.life >= (S.shards || 0))) S.life = S.shards || 0;   // existing saves: count the shards you already have as earned if (!S.shop) S.shop = {};
 const save = () => { S.t = now(); try { localStorage.setItem(KEY, JSON.stringify(S)); } catch (e) {} };
 window.__S = () => S;
 
 let frenzyUntil = 0;
 const genMult = (g) => UPS.reduce((m, u) => (u.g === g.id && S.ups[u.id] ? m * 2 : m), 1);
-const baseMult = () => (1 + S.shards * 0.1) * (S.ups.t5 ? 1.5 : 1) * (S.ups.t6 ? 2 : 1);
+const baseMult = () => (1 + S.shards * 0.1) * Math.pow(2, lv("forge")) * (S.ups.t5 ? 1.5 : 1) * (S.ups.t6 ? 2 : 1);
 const globalMult = () => baseMult() * (frenzyUntil > now() ? 10 : 1);
 const genRate = (g) => (S.own[g.id] || 0) * g.rate * genMult(g);
 const perSec = () => GENS.reduce((a, g) => a + genRate(g), 0) * globalMult();
 // KING_TAPSTACK: every tap upgrade stacks on the WHOLE tap. Flat tap gets the Everything/shard boosts; the % of /sec part already includes them.
 const tapMult = () => (S.ups.t0 ? 2 : 1) * (S.ups.t1 ? 2 : 1) * (S.ups.t4 ? 3 : 1);
-const tapPct = () => (S.ups.t3 ? 0.01 : 0) + (S.ups.t7 ? 0.03 : 0);
+const tapPct = () => (S.ups.t3 ? 0.01 : 0) + (S.ups.t7 ? 0.03 : 0) + 0.01 * lv("touch");
 const tapVal = () => (baseMult() + perSec() / (frenzyUntil > now() ? 10 : 1) * tapPct()) * tapMult() * (frenzyUntil > now() ? 10 : 1);   // KING_FRENZY10
 const R = 1.15;
 const cost = (g, k) => g.base * Math.pow(R, S.own[g.id] || 0) * (Math.pow(R, k) - 1) / (R - 1);
 const maxBuy = (g) => Math.max(0, Math.floor(Math.log(S.dust * (R - 1) / (g.base * Math.pow(R, S.own[g.id] || 0)) + 1) / Math.log(R)));
-const shardsFor = (t) => Math.floor(Math.sqrt(t / 1e9) * 2);
+/* KING_SHARDSHOP: the goal grows with every shard you've ever earned (curve A); each Supernova pays more than the last */
+const SHOP = [
+  { id: "comet", n: "Comet magnet", e: "☄️", d: (l) => `Comets come ${25 * l}% more often`, base: 2, gr: 1.8, max: 5, at: 0 },
+  { id: "frenzy", n: "Long frenzy", e: "🔥", d: (l) => `Frenzy lasts ${20 + 5 * l}s`, base: 3, gr: 1.8, max: 4, at: 0 },
+  { id: "night", n: "Night shift", e: "🌙", d: (l) => `Away earnings ${10 + 10 * l}% of your rate`, base: 3, gr: 1.7, max: 4, at: 4 },
+  { id: "head", n: "Head start", e: "🚀", d: (l) => `Each run starts with ${fmt([0, 1e4, 1e6, 1e8][l])} stardust`, base: 4, gr: 2.2, max: 3, at: 4 },
+  { id: "touch", n: "Golden touch", e: "👆", d: (l) => `Taps also give +${l}% of your /sec`, base: 6, gr: 2, max: 5, at: 8 },
+  { id: "forge", n: "Star forge", e: "⭐", d: (l) => `Everything ×${fmt(Math.pow(2, l))}`, base: 10, gr: 2.5, max: 99, at: 10 },
+  { id: "echo", n: "Shard echo", e: "💎", d: (l) => `Supernovas pay +${25 * l}% shards`, base: 15, gr: 2.5, max: 6, at: 20 },
+];
+const lv = (id) => (S.shop && S.shop[id]) || 0;
+const shopCost = (x) => Math.ceil(x.base * Math.pow(x.gr, lv(x.id)));
+const novaGoal = () => 1e9 * Math.pow(1 + (S.life || 0) / 5, 2);
+const novaMult = () => 2 * (1 + 0.5 * (S.novas || 0)) * (1 + 0.25 * lv("echo"));
+const shardsFor = (t) => Math.floor(Math.sqrt(t / novaGoal()) * novaMult());
+const nextShardAt = (t) => novaGoal() * Math.pow((shardsFor(t) + 1) / novaMult(), 2);
 const SUF = ["", "K", "M", "B", "T", "Qa", "Qi", "Sx", "Sp", "Oc", "No", "Dc"];
 const fmt = (n) => { if (!isFinite(n)) return "∞"; if (n < 1000) return n < 10 && n % 1 ? n.toFixed(1) : Math.floor(n).toLocaleString(); const e = Math.min(SUF.length - 1, Math.floor(Math.log10(n) / 3)); const v = n / Math.pow(1000, e); return (v < 10 ? v.toFixed(2) : v < 100 ? v.toFixed(1) : Math.floor(v)) + SUF[e]; };
 const dur = (ms) => { const s = Math.floor(ms / 1000), h = Math.floor(s / 3600), m = Math.floor((s % 3600) / 60); return h ? `${h}h ${m}m` : m ? `${m}m ${s % 60}s` : `${s}s`; };
@@ -519,7 +536,7 @@ function floatText(x, y, t, big) { const d = document.createElement("div"); d.cl
 function catchComet() {
   S.comets++; const ps = perSec(), pt = comet.p.clone(); let msg;
   if (Math.random() < 0.55 || ps === 0) { const g = Math.max(ps * 90, tapVal() * 40, 25); S.dust += g; S.total += g; S.allTime += g; msg = `☄️ Comet! +${fmt(g)} stardust`; burst(pt, "#ffc65c", 120, 9); }
-  else { frenzyUntil = now() + 20000; msg = "☄️ Frenzy! Everything ×10 for 20s"; burst(pt, "#ff4d5e", 140, 10); }
+  else { frenzyUntil = now() + 20000 + 5000 * lv("frenzy"); msg = "☄️ Frenzy! Everything ×10 for 20s"; burst(pt, "#ff4d5e", 140, 10); }
   if (tapMode && tc) { floatText(tc.x, tc.y, msg.split("! ")[1] || msg, true); cometFx(tc.x, tc.y, msg.includes("Frenzy") ? "#ff4d5e" : "#ffc65c"); tc = null; }
   else { const sp = pt.clone().project(camera); floatText((sp.x + 1) / 2 * W, (1 - sp.y) / 2 * H, msg.split("! ")[1] || msg, true); }
   endComet(); toast(msg); tone(1320, 0.35, "triangle", 0.06, 1.2); tone(1760, 0.5, "sine", 0.04, 1.1); buzz([20, 30, 20]);
@@ -541,7 +558,7 @@ function render() {
   $("dust").textContent = fmt(shown); $("ps").textContent = fmt(perSec()); $("tv").textContent = fmt(tapVal());
   const fr = frenzyUntil - now(); $("frenzy").hidden = fr <= 0; if (fr > 0) $("frenzy").textContent = `☄️ Frenzy ×10 · ${Math.ceil(fr / 1000)}s`;
   $("t-up").classList.toggle("new", tab !== "up" && availUps().some((u) => S.dust >= u.cost));
-  $("t-nova").classList.toggle("new", tab !== "nova" && S.total >= 1e9);
+  $("t-nova").classList.toggle("new", tab !== "nova" && (S.total >= novaGoal() || SHOP.some((x) => S.life >= x.at && lv(x.id) < x.max && S.shards >= shopCost(x))));
   let h = "";
   if (tab === "build") {
     for (const g of visibleGens()) { const locked = !S.own[g.id] && S.allTime < g.base * 0.5, k = bm === "max" ? Math.max(1, maxBuy(g)) : bm, c = cost(g, k), ok = !locked && S.dust >= c, own = S.own[g.id] || 0;
@@ -555,11 +572,16 @@ function render() {
     const a = availUps(); if (!a.length) h += `<p class="empty">No upgrades yet. Own 10 of something or keep tapping.</p>`;
     for (const u of a) { const ok = S.dust >= u.cost; h += `<button class="row ${ok ? "ok" : "no"}" data-up="${u.id}"><span class="ico emo">${u.e}</span><span class="mid"><span class="nm">${u.n.replace("  ·", " ·")}</span><span class="ds">${u.d}</span></span><span class="rt"><span class="cost">${fmt(u.cost)}</span></span></button>`; }
     h += `<p class="empty">${UPS.filter((u) => S.ups[u.id]).length} of ${UPS.length} upgrades owned</p>`;
-  } else if (tab === "nova") {
-    const sh = shardsFor(S.total), ready = S.total >= 1e9 && sh > 0;
-    h += `<div class="card"><span class="lbl">Nebula shards</span><span class="big">${S.shards}</span><span class="ds">Each shard is +10% to everything, forever. You're at +${S.shards * 10}%.</span></div>
-      <div class="card"><span class="lbl">Go supernova</span><span class="big ${ready ? "up" : ""}">+${ready ? sh : 0}</span><span class="ds">${ready ? "Your star explodes. You keep shards, achievements and stats; the rest resets and your next star is a new color." : `Unlocks at ${fmt(1e9)} stardust this run (${fmt(S.total)} so far).`}</span>
-      <button class="cta red" id="novaBtn" ${ready ? "" : "disabled"}>Supernova</button></div>`;
+  } else if (tab === "nova") {   // KING_SHARDSHOP
+    const goal = novaGoal(), sh = shardsFor(S.total), ready = S.total >= goal && sh > 0, pct = Math.min(100, S.total / goal * 100), atGoal = Math.floor(novaMult());
+    h += `<div class="card"><span class="lbl">Nebula shards</span><span class="big">${S.shards}</span><span class="ds">Each unspent shard is +10% to everything. You're at +${S.shards * 10}%. Shards earned all time: ${S.life}.</span></div>
+      <div class="card"><span class="lbl">Go supernova</span><span class="big ${ready ? "up" : ""}">+${ready ? sh : 0}</span>
+      <span class="bar"><i style="width:${pct}%"></i></span><span class="ms">${fmt(S.total)} / ${fmt(goal)} earned this run</span>
+      <span class="ds">${ready ? `Supernova now for +${sh}. Keep going: next shard at ${fmt(nextShardAt(S.total))}. You keep shards, the shop, achievements and stats; the rest resets.` : `Unlocks at ${fmt(goal)} stardust earned this run (spending doesn't count against you). Reaching it pays +${atGoal}, and earning more pays more. The goal grows with every shard you earn, and each Supernova pays more than the last.`}</span>
+      <button class="cta red" id="novaBtn" ${ready ? "" : "disabled"}>Supernova</button></div>
+      <p class="empty">Shard shop: spent shards stop giving their +10%</p>`;
+    for (const x of SHOP) { const l = lv(x.id), lock = S.life < x.at, maxed = l >= x.max, c = shopCost(x), ok = !lock && !maxed && S.shards >= c;
+      h += `<button class="row ${lock ? "locked" : ok ? "ok" : "no"}" data-shop="${x.id}" ${lock || maxed ? "disabled" : ""}><span class="ico emo">${lock ? "?" : x.e}</span><span class="mid"><span class="nm">${x.n}${l ? ` · lv ${l}` : ""}</span><span class="ds">${lock ? `Unlocks after ${x.at} shards earned all time` : maxed ? x.d(l) + " (max)" : `${l ? x.d(l) + " → " : ""}${x.d(l + 1)}`}</span></span><span class="rt"><span class="cost">${lock || maxed ? "" : c + " 💎"}</span></span></button>`; }
   } else {
     const kv = [["Stardust this run", fmt(S.total)], ["All time", fmt(S.allTime)], ["Per second", fmt(perSec())], ["Taps", S.taps.toLocaleString()], ["Comets caught", S.comets], ["Supernovas", S.novas], ["Bodies in orbit", GENS.reduce((a, g) => a + (S.own[g.id] || 0), 0)], ["Playing since", new Date(S.born).toLocaleDateString()]];
     h += `<div class="card">${kv.map(([a, b]) => `<div class="kv"><span>${a}</span><b>${b}</b></div>`).join("")}</div>
@@ -586,13 +608,14 @@ $("list").addEventListener("click", (e) => {
   const b = e.target.closest("[data-buy]"), u = e.target.closest("[data-up]");
   if (b) buyGen(GENS.find((x) => x.id === b.dataset.buy), +b.dataset.k, b);
   if (u) { const x = UPS.find((y) => y.id === u.dataset.up); if (S.dust < x.cost) return tone(160, 0.1, "square", 0.02, 0.9); S.dust -= x.cost; S.ups[x.id] = 1; tone(880, 0.2, "triangle", 0.05, 1.5); toast(`${x.e} ${x.n.replace("  ·", " ·")}`); lastHTML = ""; render(); save(); }
+  const sp = e.target.closest("[data-shop]"); if (sp) { const x = SHOP.find((y) => y.id === sp.dataset.shop), c = shopCost(x); if (S.life < x.at || lv(x.id) >= x.max || S.shards < c) return tone(160, 0.1, "square", 0.02, 0.9); S.shards -= c; S.shop[x.id] = lv(x.id) + 1; tone(880, 0.2, "triangle", 0.05, 1.5); toast(`${x.e} ${x.n} · lv ${S.shop[x.id]}`); lastHTML = ""; render(); save(); }
   if (e.target.id === "novaBtn") supernova();
   if (e.target.id === "wipe") { if (now() - (window._wa || 0) < 3000) { S = fresh(true); try { localStorage.removeItem(KEY); } catch (er) {} syncBodies(); orbitLines.clear(); setEra(); lastHTML = ""; render(); toast("Fresh universe"); } else { window._wa = now(); toast("Tap Wipe again to erase everything"); } }
 });
 function supernova() {
-  const sh = shardsFor(S.total); if (S.total < 1e9 || sh <= 0) return;
+  const sh = shardsFor(S.total); if (S.total < novaGoal() || sh <= 0) return;
   shock.visible = true; shockT = 0; shake = 1; burst(new THREE.Vector3(), "#ffffff", 400, 26); tone(80, 2.2, "sawtooth", 0.09, 0.4); tone(1200, 1.4, "sine", 0.04, 0.3); buzz([60, 40, 160]);
-  S.shards += sh; S.novas++; S = fresh(false, S); syncBodies(); orbitLines.clear(); setTimeout(setEra, 600); toast(`Supernova! +${sh} Nebula shards`);
+  S.shards += sh; S.life = (S.life || 0) + sh; S.novas++; S = fresh(false, S); { const hs = [0, 1e4, 1e6, 1e8][lv("head")]; S.dust += hs; } syncBodies(); orbitLines.clear(); setTimeout(setEra, 600); toast(`Supernova! +${sh} Nebula shards`);
   tab = "build"; document.querySelectorAll(".tab[data-t]").forEach((x) => x.classList.toggle("on", x.dataset.t === "build")); $("buymode").hidden = false; lastHTML = ""; render(); save();
 }
 
@@ -601,7 +624,7 @@ const clock = new THREE.Clock(); let uiAcc = 0, saveAcc = 0, t = 0;
 function frame() {
   const dt = Math.min(0.05, clock.getDelta()); t += dt; U.uT.value = t;
   const g = perSec() * dt; S.dust += g; S.total += g; S.allTime += g;
-  if (!comet && now() > nextComet) { spawnComet(); nextComet = now() + (S.ups.t2 ? 0.5 : 1) * (40000 + Math.random() * 50000); }
+  if (!comet && now() > nextComet) { spawnComet(); nextComet = now() + (S.ups.t2 ? 0.5 : 1) / (1 + 0.25 * lv("comet")) * (40000 + Math.random() * 50000); }
   // camera: slow drift + flick
   yawVel *= 0.94; camYaw += 0.025 * dt + yawVel;
   /* KING_PIXEL: no cinema in pixel mode */
@@ -637,7 +660,7 @@ function frame() {
   if (saveAcc > 10) { saveAcc = 0; save(); }
   requestAnimationFrame(frame);
 }
-function offline() { const away = Math.min(now() - S.t, 8 * 3600e3); if (away > 60e3) { const g = perSec() * away / 1000 * 0.1;   /* KING_OFFLINE10: away earns 10% of your live rate (King, Nov 15) */ if (g > 0) { S.dust += g; S.total += g; S.allTime += g; toast(`While you were away (${dur(away)}): +${fmt(g)} stardust`); } } S.t = now(); }
+function offline() { const away = Math.min(now() - S.t, 8 * 3600e3); if (away > 60e3) { const g = perSec() * away / 1000 * (0.1 + 0.1 * lv("night"));   /* KING_OFFLINE10: away earns 10% of your live rate (King, Nov 15) */ if (g > 0) { S.dust += g; S.total += g; S.allTime += g; toast(`While you were away (${dur(away)}): +${fmt(g)} stardust`); } } S.t = now(); }
 document.addEventListener("visibilitychange", () => { if (document.hidden) save(); else offline(); });
 window.addEventListener("pagehide", save);
 $("snd").innerHTML = S.sound ? SPK_ON : SPK_OFF;
