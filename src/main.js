@@ -43,13 +43,13 @@ window.__S = () => S;
 let frenzyUntil = 0;
 const genMult = (g) => UPS.reduce((m, u) => (u.g === g.id && S.ups[u.id] ? m * 2 : m), 1);
 const baseMult = () => (1 + S.shards * 0.1) * (S.ups.t5 ? 1.5 : 1) * (S.ups.t6 ? 2 : 1);
-const globalMult = () => baseMult() * (frenzyUntil > now() ? 7 : 1);
+const globalMult = () => baseMult() * (frenzyUntil > now() ? 10 : 1);
 const genRate = (g) => (S.own[g.id] || 0) * g.rate * genMult(g);
 const perSec = () => GENS.reduce((a, g) => a + genRate(g), 0) * globalMult();
 // KING_TAPSTACK: every tap upgrade stacks on the WHOLE tap. Flat tap gets the Everything/shard boosts; the % of /sec part already includes them.
 const tapMult = () => (S.ups.t0 ? 2 : 1) * (S.ups.t1 ? 2 : 1) * (S.ups.t4 ? 3 : 1);
 const tapPct = () => (S.ups.t3 ? 0.01 : 0) + (S.ups.t7 ? 0.03 : 0);
-const tapVal = () => (baseMult() + perSec() * tapPct()) * tapMult() * (frenzyUntil > now() ? 7 : 1);
+const tapVal = () => (baseMult() + perSec() / (frenzyUntil > now() ? 10 : 1) * tapPct()) * tapMult() * (frenzyUntil > now() ? 10 : 1);   // KING_FRENZY10
 const R = 1.15;
 const cost = (g, k) => g.base * Math.pow(R, S.own[g.id] || 0) * (Math.pow(R, k) - 1) / (R - 1);
 const maxBuy = (g) => Math.max(0, Math.floor(Math.log(S.dust * (R - 1) / (g.base * Math.pow(R, S.own[g.id] || 0)) + 1) / Math.log(R)));
@@ -519,7 +519,7 @@ function floatText(x, y, t, big) { const d = document.createElement("div"); d.cl
 function catchComet() {
   S.comets++; const ps = perSec(), pt = comet.p.clone(); let msg;
   if (Math.random() < 0.55 || ps === 0) { const g = Math.max(ps * 90, tapVal() * 40, 25); S.dust += g; S.total += g; S.allTime += g; msg = `☄️ Comet! +${fmt(g)} stardust`; burst(pt, "#ffc65c", 120, 9); }
-  else { frenzyUntil = now() + 20000; msg = "☄️ Frenzy! Everything ×7 for 20s"; burst(pt, "#ff4d5e", 140, 10); }
+  else { frenzyUntil = now() + 20000; msg = "☄️ Frenzy! Everything ×10 for 20s"; burst(pt, "#ff4d5e", 140, 10); }
   if (tapMode && tc) { floatText(tc.x, tc.y, msg.split("! ")[1] || msg, true); cometFx(tc.x, tc.y, msg.includes("Frenzy") ? "#ff4d5e" : "#ffc65c"); tc = null; }
   else { const sp = pt.clone().project(camera); floatText((sp.x + 1) / 2 * W, (1 - sp.y) / 2 * H, msg.split("! ")[1] || msg, true); }
   endComet(); toast(msg); tone(1320, 0.35, "triangle", 0.06, 1.2); tone(1760, 0.5, "sine", 0.04, 1.1); buzz([20, 30, 20]);
@@ -539,7 +539,7 @@ let lastHTML = "", shown = 0;
 function render() {
   shown += (S.dust - shown) * 0.35; if (Math.abs(S.dust - shown) < 1) shown = S.dust;
   $("dust").textContent = fmt(shown); $("ps").textContent = fmt(perSec()); $("tv").textContent = fmt(tapVal());
-  const fr = frenzyUntil - now(); $("frenzy").hidden = fr <= 0; if (fr > 0) $("frenzy").textContent = `☄️ Frenzy ×7 · ${Math.ceil(fr / 1000)}s`;
+  const fr = frenzyUntil - now(); $("frenzy").hidden = fr <= 0; if (fr > 0) $("frenzy").textContent = `☄️ Frenzy ×10 · ${Math.ceil(fr / 1000)}s`;
   $("t-up").classList.toggle("new", tab !== "up" && availUps().some((u) => S.dust >= u.cost));
   $("t-nova").classList.toggle("new", tab !== "nova" && S.total >= 1e9);
   let h = "";
