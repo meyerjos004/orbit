@@ -1,0 +1,27 @@
+// TALOS scrap + recycle (KING_RECYCLE). Serve the repo on :8823 first.
+const { chromium } = require('playwright');
+(async()=>{const b=await chromium.launch(); let fail=0; const ok=(c,m)=>{console.log((c?'PASS ':'FAIL ')+m); if(!c) fail++;};
+const ctx=await b.newContext({viewport:{width:390,height:844},deviceScaleFactor:2});
+await ctx.addInitScript(()=>{ if(sessionStorage.getItem('s'))return; sessionStorage.setItem('s','1'); localStorage.setItem('kingverse.dev','1');
+  localStorage.setItem('kv.talos',JSON.stringify({br:1e6,size:4,cells:[1,6,0,0, 0,0,0,0, 0,0,0,0, 0,0,0,0],maxT:6,lv:{auto:0,tier:1,size:0},relic:false,t:Date.now()})); });
+const p=await ctx.newPage(); const errs=[]; p.on('pageerror',e=>errs.push(e.message));
+await p.goto('http://localhost:8823/talos/'); await p.waitForTimeout(1200);
+ok(await p.$eval('#recy',e=>e.disabled), 'recycle disabled with nothing selected');
+await p.click('#board button[data-i="0"]'); await p.waitForTimeout(200);
+const odds=await p.$eval('#odds',e=>e.textContent); console.log('  ', odds);
+ok(!/Gear/.test(odds) && /Bolt/.test(odds), 'odds never offer a Gear (below the furnace tier) or the same part');
+ok(!/TALOS/.test(odds) && /Leg/.test(odds) && !/Core/.test(odds), 'only the next locked tier (Leg) is a long shot; nothing past it, never TALOS');
+await p.screenshot({path:'/home/claude/kvshots/recy-selected.png'});
+const br0=await p.evaluate(()=>S.br); await p.click('#recy'); await p.waitForTimeout(300);
+const r=await p.evaluate(()=>({t:S.cells[0],br:S.br,ry:!!S.ry}));
+ok(r.t>=2 && r.t<=7 && r.br<br0 && r.ry, 'recycled the Gear into tier '+r.t+' and charged '+Math.round(br0-r.br));
+await p.click('#board button[data-i="0"]'); await p.waitForTimeout(200);
+ok(/\d+ s$/.test(await p.$eval('#recy',e=>e.textContent)) && await p.$eval('#recy',e=>e.disabled), 'cooldown shows and blocks a second recycle');
+await p.screenshot({path:'/home/claude/kvshots/recy-cooldown.png'});
+await p.click('#board button[data-i="0"]');
+await p.click('#board button[data-i="1"]'); await p.click('#scrap'); await p.waitForTimeout(150);
+ok(await p.evaluate(()=>S.cells[1])===6, 'first tap on a big part (Arm) only arms Scrap');
+await p.click('#scrap'); await p.waitForTimeout(150);
+ok(await p.evaluate(()=>S.cells[1])===0, 'second tap scraps it');
+ok(errs.length===0, 'no page errors '+errs.join(';'));
+console.log(fail?fail+' failed':'all pass'); await b.close(); process.exit(fail?1:0);})();
